@@ -537,7 +537,7 @@ export default function UtocniciPage() {
             ))}
           </div>
 
-          {/* CTA */}
+         {/* CTA */}
           <div className="text-center p-8 rounded-xl border border-primary/20 bg-card/50 space-y-4">
             <h2 className="text-2xl font-bold">Teď víte, jak útočníci myslí</h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
@@ -547,4 +547,21 @@ export default function UtocniciPage() {
             <div className="flex flex-wrap justify-center gap-4 pt-2">
               <Button asChild size="lg">
                 <Link href="/generator">
-                  <Key
+                  <Key className="mr-2 h-5 w-5" />
+                  Vygenerovat bezpečné heslo
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="bg-transparent">
+                <Link href="/test">
+                  <TestTube className="mr-2 h-5 w-5" />
+                  Otestovat sílu hesla
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  )
+}
