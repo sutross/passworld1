@@ -18,6 +18,7 @@ const navItems = [
   { href: "/generator", label: "Generátor", icon: Key },
   { href: "/test", label: "Analýza hesla", icon: TestTube },
   { href: "/osveta", label: "Osvěta", icon: BookOpen },
+  { href: "/utocnici", label: "Metody útoků", icon: Shield },
 ]
 
 export function Navigation() {
