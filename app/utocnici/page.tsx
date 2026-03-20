@@ -3,387 +3,331 @@
 import { useState, useEffect, useRef } from "react"
 import { Navigation } from "@/components/navigation"
 import Link from "next/link"
-import { Key, TestTube, Shield } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Key, TestTube } from "lucide-react"
 
 // =============================================================================
 // TYPY
 // =============================================================================
 
-interface Step {
-  label: string
-  desc: string
-}
+interface Step { label: string; desc: string }
 
 interface AttackData {
   id: string
   icon: string
-  iconBg: string
   title: string
   subtitle: string
   danger: "Kritické" | "Vysoké" | "Střední"
-  dangerClass: string
-  progressColor: string
+  accentColor: string
   steps: Step[]
   animLabel: string
   animType: string
-  tipColor: string
-  tipBg: string
   tipText: string
 }
 
 // =============================================================================
-// DATA ÚTOKŮ
+// DATA
 // =============================================================================
 
 const ATTACKS: AttackData[] = [
   {
-    id: "brute",
-    icon: "⚡",
-    iconBg: "oklch(0.97 0.01 30)",
-    title: "Útok hrubou silou",
-    subtitle: "Zkouší každou kombinaci znaků",
-    danger: "Kritické",
-    dangerClass: "danger-critical",
-    progressColor: "oklch(0.5 0.18 30)",
+    id: "brute", icon: "⚡",
+    title: "Útok hrubou silou", subtitle: "Zkouší každou kombinaci znaků",
+    danger: "Kritické", accentColor: "#ef4444",
     steps: [
-      {
-        label: "Útočník najde přihlašovací formulář",
-        desc: "Vyhledá webovou stránku nebo aplikaci s přihlašovacím polem. Cíl: vaše heslo.",
-      },
-      {
-        label: "Spustí automatizovaný program",
-        desc: "Speciální software zkouší hesla automaticky — tisíce za sekundu, 24/7 bez přestávky.",
-      },
-      {
-        label: "Zkouší kombinace systematicky",
-        desc: "Začne od 'aaa', pokračuje 'aab', 'aac'… projde každou možnou kombinaci znaků.",
-      },
-      {
-        label: "Nalezne shodu — přihlásí se",
-        desc: "Jakmile program narazí na vaše heslo, útočník okamžitě dostane přístup k vašemu účtu.",
-      },
+      { label: "Útočník najde přihlašovací formulář", desc: "Vyhledá webovou stránku nebo aplikaci s přihlašovacím polem. Cíl: vaše heslo." },
+      { label: "Spustí automatizovaný program", desc: "Speciální software zkouší hesla automaticky — tisíce za sekundu, 24/7 bez přestávky." },
+      { label: "Zkouší kombinace systematicky", desc: "Začne od 'aaa', pokračuje 'aab', 'aac'… projde každou možnou kombinaci znaků." },
+      { label: "Nalezne shodu — přihlásí se", desc: "Jakmile program narazí na vaše heslo, útočník okamžitě dostane přístup k vašemu účtu." },
     ],
-    animLabel: "Program zkouší tato hesla:",
-    animType: "brute",
-    tipBg: "oklch(0.97 0.01 30)",
-    tipColor: "oklch(0.35 0.14 30)",
-    tipText:
-      "Obrana: heslo delší než 12 znaků prodlouží dobu útoku z minut na stovky let. Zapněte limitování pokusů na webu.",
+    animLabel: "Program zkouší:", animType: "brute",
+    tipText: "Heslo 12+ znaků prodlouží dobu útoku z minut na stovky let.",
   },
   {
-    id: "dict",
-    icon: "📖",
-    iconBg: "oklch(0.97 0.03 80)",
-    title: "Slovníkový útok",
-    subtitle: "Zkouší běžná slova a jejich variace",
-    danger: "Kritické",
-    dangerClass: "danger-critical",
-    progressColor: "oklch(0.55 0.13 80)",
+    id: "dict", icon: "📖",
+    title: "Slovníkový útok", subtitle: "Zkouší běžná slova a jejich variace",
+    danger: "Kritické", accentColor: "#f97316",
     steps: [
-      {
-        label: "Útočník si stáhne slovník hesel",
-        desc: "Existují volně dostupné seznamy s miliony nejčastějších hesel. RockYou: 14 milionů hesel z reálných úniků.",
-      },
-      {
-        label: "Program přidá chytré variace",
-        desc: "Automaticky přidává číslice na konec, mění 'a' za '@', 'e' za '3', přidává velká písmena na začátek.",
-      },
-      {
-        label: "Zkouší hesla ze seznamu",
-        desc: "Místo náhodných kombinací zkouší jen reálná hesla — je to 100× rychlejší než brute force.",
-      },
-      {
-        label: "Vaše 'chytré' heslo selže",
-        desc: "Heslo123!, Passworld@ nebo Léto2024 jsou ve slovnících. Útočník je prolomí za sekundy.",
-      },
+      { label: "Stáhne seznam reálných hesel", desc: "RockYou seznam obsahuje 14 milionů hesel z reálných úniků — volně dostupný." },
+      { label: "Program přidá chytré variace", desc: "Automaticky zkouší heslo1, Heslo!, h3sl0, HESLO123 — všechny vzory jsou ve slovníku." },
+      { label: "Zkouší miliony hesel za sekundu", desc: "Je to 100× rychlejší než brute force, protože zkouší jen reálná hesla." },
+      { label: "Vaše 'chytré' heslo selže", desc: "Heslo123!, Passworld@ nebo Léto2024 jsou ve slovnících. Útočník je prolomí za sekundy." },
     ],
-    animLabel: "Program zkouší ze slovníku:",
-    animType: "dict",
-    tipBg: "oklch(0.97 0.03 80)",
-    tipColor: "oklch(0.4 0.12 80)",
-    tipText: "Obrana: nepoužívejte slovní hesla. Heslo musí být náhodné — ne 'chytré'. Použijte náš generátor.",
+    animLabel: "Ze slovníku zkouší:", animType: "dict",
+    tipText: "Žádná slovní hesla. Heslo musí být náhodné — ne 'chytré'.",
   },
   {
-    id: "phishing",
-    icon: "🎣",
-    iconBg: "oklch(0.97 0.02 50)",
-    title: "Phishing",
-    subtitle: "Podvodná přihlašovací stránka",
-    danger: "Kritické",
-    dangerClass: "danger-critical",
-    progressColor: "oklch(0.5 0.15 50)",
+    id: "phishing", icon: "🎣",
+    title: "Phishing", subtitle: "Podvodná přihlašovací stránka",
+    danger: "Kritické", accentColor: "#eab308",
     steps: [
-      {
-        label: "Útočník vytvoří falešnou stránku",
-        desc: "Zkopíruje přihlašovací stránku banky, Googlu nebo Facebooku — pixel po pixelu. Vypadá identicky.",
-      },
-      {
-        label: "Pošle podvodný e-mail",
-        desc: "'Váš účet byl pozastaven, přihlaste se ihned.' Odkaz vede na falešnou stránku, ne na originál.",
-      },
-      {
-        label: "Oběť zadá heslo sama",
-        desc: "Vypadá to jako normální přihlášení. Uživatel zadá jméno a heslo — a odešle je přímo útočníkovi.",
-      },
-      {
-        label: "Útočník má přihlašovací údaje",
-        desc: "Ani nejsilnější heslo nepomůže — zadali jste ho sami. Útočník se přihlásí k vašemu účtu.",
-      },
+      { label: "Vytvoří falešnou stránku", desc: "Zkopíruje přihlašovací stránku banky nebo Googlu — pixel po pixelu. Vypadá identicky." },
+      { label: "Pošle podvodný e-mail", desc: "'Váš účet byl pozastaven.' Odkaz vede na falešnou stránku, ne na originál." },
+      { label: "Oběť zadá heslo sama", desc: "Uživatel zadá jméno a heslo — a odešle je přímo útočníkovi. Nic netuší." },
+      { label: "Útočník se přihlásí", desc: "Ani nejsilnější heslo nepomůže — zadali jste ho sami na falešné stránce." },
     ],
-    animLabel: "Falešné URL v podvodném e-mailu:",
-    animType: "phishing",
-    tipBg: "oklch(0.97 0.02 50)",
-    tipColor: "oklch(0.35 0.13 50)",
-    tipText:
-      "Obrana: vždy kontrolujte URL v adresním řádku. Nepoužívejte odkazy z e-mailů — přejděte na stránku ručně.",
+    animLabel: "Falešné URL:", animType: "phishing",
+    tipText: "Vždy kontrolujte URL v adresním řádku. Hardwarový klíč (FIDO2) je phishing-proof.",
   },
   {
-    id: "stuffing",
-    icon: "📋",
-    iconBg: "oklch(0.97 0.02 220)",
-    title: "Credential stuffing",
-    subtitle: "Uniklá hesla zkoušená na jiných webech",
-    danger: "Vysoké",
-    dangerClass: "danger-high",
-    progressColor: "oklch(0.55 0.12 220)",
+    id: "stuffing", icon: "📋",
+    title: "Credential stuffing", subtitle: "Uniklá hesla zkoušená všude",
+    danger: "Vysoké", accentColor: "#8b5cf6",
     steps: [
-      {
-        label: "Někde dojde k úniku dat",
-        desc: "Velký web (LinkedIn, Adobe, Facebook) je napaden a hesla milionů uživatelů uniknou na internet.",
-      },
-      {
-        label: "Útočník koupí seznam přihlašovacích dat",
-        desc: "Na dark webu jsou miliardy kombinací email+heslo k dostání za pár dolarů. Snadno dostupné.",
-      },
-      {
-        label: "Bot zkouší stejné heslo na jiných webech",
-        desc: "Automaticky zkouší kombinaci na Gmailu, bankovnictví, e-shopu. Spoléhá, že máte stejné heslo všude.",
-      },
-      {
-        label: "Jeden únik = všechny účty",
-        desc: "Používáte-li stejné heslo na 5 místech, jeden únik kompromituje všechny. Útočník to ví.",
-      },
+      { label: "Někde dojde k úniku dat", desc: "LinkedIn, Adobe, Facebook — hesla milionů uživatelů uniknou na internet." },
+      { label: "Koupí seznam na dark webu", desc: "Miliardy kombinací email+heslo jsou k dispozici za pár dolarů." },
+      { label: "Bot zkouší heslo na jiných webech", desc: "Automaticky testuje na Gmailu, bankovnictví, e-shopu. Spoléhá na opakování hesel." },
+      { label: "Jeden únik = všechny účty", desc: "Stejné heslo na 5 místech = jeden únik kompromituje vše. Útočník to ví." },
     ],
-    animLabel: "Bot zkouší uniklé heslo na webech:",
-    animType: "stuffing",
-    tipBg: "oklch(0.97 0.02 220)",
-    tipColor: "oklch(0.35 0.1 220)",
-    tipText:
-      "Obrana: každý účet musí mít unikátní heslo. Používejte správce hesel — pamatuje za vás.",
+    animLabel: "Bot zkouší na webech:", animType: "stuffing",
+    tipText: "Každý účet musí mít unikátní heslo. Správce hesel to za vás vyřeší.",
   },
   {
-    id: "rainbow",
-    icon: "🌈",
-    iconBg: "oklch(0.97 0.02 270)",
-    title: "Rainbow table útok",
-    subtitle: "Předpočítané hashe hesel",
-    danger: "Vysoké",
-    dangerClass: "danger-high",
-    progressColor: "oklch(0.55 0.13 270)",
+    id: "rainbow", icon: "🌈",
+    title: "Rainbow table útok", subtitle: "Předpočítané hashe hesel",
+    danger: "Vysoké", accentColor: "#06b6d4",
     steps: [
-      {
-        label: "Web ukládá hesla jako hash",
-        desc: "Heslo 'kocka123' se uloží jako nečitelný řetězec: '5f4dcc3b5aa765d6…'. Vypadá bezpečně.",
-      },
-      {
-        label: "Útočník má tabulku předpočítaných hashů",
-        desc: "Někdo předem spočítal hashe milionů hesel a uložil je do obří tabulky. Vyhledávání trvá milisekundy.",
-      },
-      {
-        label: "Porovná uniklý hash s tabulkou",
-        desc: "Hash '5f4dcc3b…' najde v tabulce a okamžitě ví: toto heslo je 'kocka123'. Žádné lámání.",
-      },
-      {
-        label: "Heslo odhaleno bez čekání",
-        desc: "Rainbow table mění prolomení hashů na prosté vyhledávání. Sekundy, ne hodiny.",
-      },
+      { label: "Web ukládá hesla jako hash", desc: "'kocka123' → '5f4dcc3b5aa765d6…'. Vypadá bezpečně, ale bez soli je zranitelné." },
+      { label: "Útočník má obří tabulku hashů", desc: "Někdo předem spočítal hashe milionů hesel. Vyhledávání trvá milisekundy." },
+      { label: "Porovná hash s tabulkou", desc: "Hash '5f4dcc3b…' najde v tabulce a okamžitě ví: heslo je 'password'." },
+      { label: "Heslo odhaleno bez lámání", desc: "Rainbow table mění prolomení hashů na prosté vyhledávání. Sekundy, ne hodiny." },
     ],
-    animLabel: "Vyhledávání v rainbow tabulce:",
-    animType: "rainbow",
-    tipBg: "oklch(0.97 0.02 270)",
-    tipColor: "oklch(0.35 0.1 270)",
-    tipText:
-      "Obrana: weby musí přidávat náhodný 'salt' ke každému heslu před hashováním — tím rainbow tables přestanou fungovat.",
+    animLabel: "Vyhledává v tabulce:", animType: "rainbow",
+    tipText: "Weby musí používat salt + bcrypt/Argon2. Rainbow tables pak přestanou fungovat.",
   },
   {
-    id: "keylogger",
-    icon: "🖱️",
-    iconBg: "oklch(0.97 0.02 145)",
-    title: "Keylogger / malware",
-    subtitle: "Zachytává každý stisk klávesy",
-    danger: "Střední",
-    dangerClass: "danger-medium",
-    progressColor: "oklch(0.5 0.12 145)",
+    id: "keylogger", icon: "🖱️",
+    title: "Keylogger / malware", subtitle: "Zachytává každý stisk klávesy",
+    danger: "Střední", accentColor: "#4ade80",
     steps: [
-      {
-        label: "Zařízení se nakazí nechtěně",
-        desc: "Stáhnete nelegální software, kliknete na podezřelý odkaz nebo otevřete přílohu. Virus se nainstaluje.",
-      },
-      {
-        label: "Keylogger běží na pozadí nepozorovaně",
-        desc: "Zaznamenává každý stisk klávesy. Vy nic nevidíte, nic se nezpomaluje. Virus tiše čeká.",
-      },
-      {
-        label: "Zadáte heslo do přihlašovacího pole",
-        desc: "V tu chvíli keylogger zaznamená: 'k-o-c-k-a-1-2-3'. Kompletní heslo s kontextem (na jakém webu).",
-      },
-      {
-        label: "Záznamy jsou odeslány útočníkovi",
-        desc: "Pravidelně nebo v reálném čase jsou klávesy odeslány na server útočníka. Heslo je prozrazeno.",
-      },
+      { label: "Zařízení se nakazí nechtěně", desc: "Nelegální software, podezřelý odkaz nebo příloha v e-mailu. Virus se nainstaluje tiše." },
+      { label: "Keylogger běží nepozorovaně", desc: "Zaznamenává každý stisk klávesy. Vy nic nevidíte, nic se nezpomaluje." },
+      { label: "Zadáte heslo do pole", desc: "V tu chvíli keylogger zaznamená: 'h-e-s-l-o-1-2-3'. S kontextem — na jakém webu." },
+      { label: "Záznamy odeslány útočníkovi", desc: "Pravidelně nebo v reálném čase jsou klávesy odeslány na server útočníka." },
     ],
-    animLabel: "Keylogger zaznamenal stisknuté klávesy:",
-    animType: "keylogger",
-    tipBg: "oklch(0.97 0.02 145)",
-    tipColor: "oklch(0.3 0.1 145)",
-    tipText:
-      "Obrana: aktuální antivirový software a nestahovat z neznámých zdrojů. Hardwarový klíč (FIDO2) zachrání účet i při aktivním keyloggeru.",
+    animLabel: "Keylogger zaznamenal:", animType: "keylogger",
+    tipText: "Aktuální antivirus. FIDO2 klíč zachrání účet i při aktivním keyloggeru.",
   },
 ]
 
-// =============================================================================
-// ANIMAČNÍ SEKVENCE
-// =============================================================================
-
-const ANIM_SEQUENCES: Record<string, string[]> = {
-  brute: ["aaaa", "aaab", "aaac", "aaba", "abaa", "abba", "password", "letmein", "qwerty1", "iloveyou", "monkey1", "welcome1", "login123", "abc12345", "12345678"],
-  dict: ["heslo", "heslo1", "heslo123", "Heslo123!", "H3sl0!23", "password", "p@ssword", "P@ssw0rd!", "letmein", "l3tm3in!", "qwerty", "Qwerty1!", "Admin123!", "kocka", "Kocka2024!"],
-  phishing: ["g00gle.com/login", "gooogle.com", "google-security.net", "accounts-google.verify-now.com", "secure-google-login.tk", "google.com.login-verify.ru", "googIe.com (velké I jako l)", "accounts.g00gle.com"],
-  stuffing: ["gmail.com ✗", "facebook.com ✗", "netflix.com ✗", "amazon.com ✗", "bank.cz ✗", "instagram.com ✗", "paypal.com ✗", "icloud.com ✗", "seznam.cz ✓ PŘÍSTUP ZÍSKÁN!"],
-  rainbow: ["hash 5f4dcc3b… → 'password'", "hash e10adc39… → '123456'", "hash 25d55ad2… → '12345678'", "hash 827ccb0e… → '12345'", "hash d8578edf… → 'qwerty'", "hash 96e79218… → '111111'", "NALEZENO: váš hash → 'kocka123'"],
-  keylogger: ["[chrome] g-m-a-i-l-.-c-o-m", "[gmail] j-m-e-n-o-@-e-m-a-i-l-.-c-z", "[gmail] h-e-s-l-o-1-2-3", "[bank.cz] r-o-d-n-é-č-í-s-l-o", "[bank.cz] p-i-n-:-1-2-3-4", "ODESLÁNO na útočníkův server ✓"],
+const ANIM_SEQ: Record<string, string[]> = {
+  brute:     ["aaaa","aaab","aaac","aaba","abaa","password","letmein","qwerty1","iloveyou","monkey1","login123","12345678"],
+  dict:      ["heslo","heslo1","Heslo123!","H3sl0!23","p@ssword","P@ssw0rd!","l3tm3in!","Kocka2024!","Admin123!","qwerty"],
+  phishing:  ["g00gle.com/login","gooogle.com","google-security.net","accounts-google.verify-now.com","googIe.com (I≠l)"],
+  stuffing:  ["gmail.com ✗","facebook.com ✗","netflix.com ✗","amazon.com ✗","bank.cz ✗","paypal.com ✗","seznam.cz ✓ PŘÍSTUP!"],
+  rainbow:   ["hash 5f4dcc3b → 'password'","hash e10adc39 → '123456'","hash 25d55ad2 → '12345678'","NALEZENO → 'kocka123'"],
+  keylogger: ["[chrome] g-m-a-i-l-.-c-o-m","[gmail] h-e-s-l-o-1-2-3","[bank.cz] p-i-n-:-1-2-3-4","ODESLÁNO na server ✓"],
 }
 
 // =============================================================================
-// KOMPONENTA KARTY
+// STYLY
+// =============================================================================
+
+const STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@300;400;500;600&display=swap');
+
+  .atk-page * { box-sizing: border-box; }
+  .atk-page { font-family: 'Sora', sans-serif; min-height: 100vh; padding: 32px 16px 64px; }
+
+  /* HERO */
+  .atk-hero { max-width: 900px; margin: 0 auto 32px; text-align: center; }
+  .atk-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: oklch(0.5 0.18 30 / 0.1); border: 1px solid oklch(0.5 0.18 30 / 0.25);
+    border-radius: 20px; padding: 4px 14px; font-size: 11px;
+    color: oklch(0.6 0.18 30); font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 16px; letter-spacing: 0.04em;
+  }
+  .atk-title { font-size: clamp(24px,4vw,36px); font-weight: 600; margin-bottom: 10px; }
+  .atk-sub { font-size: 14px; color: var(--muted-foreground); line-height: 1.6; max-width: 560px; margin: 0 auto; }
+
+  /* GRID */
+  .atk-grid { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 10px; }
+  @media (max-width: 820px) { .atk-grid { grid-template-columns: 1fr; } }
+
+  /* CARD */
+  .atk-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden; cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+  .atk-card:hover { transform: translateY(-2px); }
+  .atk-card.open { transform: none; }
+
+  .atk-header { padding: 14px 16px 10px; display: flex; align-items: center; gap: 12px; }
+  .atk-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .atk-info { flex: 1; min-width: 0; }
+  .atk-title-text { font-size: 14px; font-weight: 600; }
+  .atk-subtitle { font-size: 11px; color: var(--muted-foreground); margin-top: 1px; }
+  .atk-badge-danger {
+    font-size: 10px; font-weight: 700; padding: 3px 8px;
+    border-radius: 5px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+
+  .atk-hint { padding: 0 16px 10px; font-size: 11px; color: var(--muted-foreground); display: flex; align-items: center; gap: 4px; }
+  .atk-chevron { transition: transform 0.3s; display: inline-block; font-style: normal; font-size: 10px; }
+  .atk-chevron.open { transform: rotate(180deg); }
+
+  /* SCENE */
+  .atk-scene { max-height: 0; overflow: hidden; transition: max-height 0.4s cubic-bezier(0.4,0,0.2,1); }
+  .atk-scene.open { max-height: 600px; }
+  .atk-scene-inner { border-top: 1px solid var(--border); padding: 14px 16px 16px; }
+
+  /* STEPS */
+  .atk-steps { display: flex; flex-direction: column; }
+  .atk-step {
+    display: flex; gap: 10px; padding: 8px 0;
+    opacity: 0; transform: translateX(-6px);
+    transition: opacity 0.3s, transform 0.3s; position: relative;
+  }
+  .atk-step.visible { opacity: 1; transform: none; }
+  .atk-step-line { position: absolute; left: 11px; top: 32px; width: 1px; bottom: 0; background: var(--border); }
+  .atk-step-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; flex-shrink: 0;
+    position: relative; z-index: 1; font-family: 'JetBrains Mono', monospace;
+  }
+  .atk-step-body { flex: 1; padding-top: 2px; }
+  .atk-step-label { font-size: 12px; font-weight: 500; margin-bottom: 2px; }
+  .atk-step-desc { font-size: 11px; color: var(--muted-foreground); line-height: 1.5; }
+
+  /* PROGRESS */
+  .atk-progress { height: 2px; background: var(--border); border-radius: 1px; margin: 10px 0 12px; overflow: hidden; }
+  .atk-progress-fill { height: 100%; border-radius: 1px; transition: width 0.4s ease; }
+
+  /* TERMINAL */
+  .atk-terminal {
+    background: var(--background); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden; margin-bottom: 12px;
+  }
+  .atk-terminal-bar { padding: 6px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 5px; }
+  .atk-terminal-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+  .atk-terminal-label { font-size: 10px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.06em; margin-left: 4px; }
+  .atk-terminal-body { padding: 10px 12px; min-height: 60px; }
+  .atk-terminal-prev { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted-foreground); opacity: 0.4; margin-bottom: 2px; display: block; }
+  .atk-terminal-cur { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--foreground); }
+  .atk-terminal-cursor { display: inline-block; width: 7px; height: 13px; background: currentColor; vertical-align: middle; margin-left: 2px; animation: atk-blink 1s infinite; }
+  @keyframes atk-blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* TIP */
+  .atk-tip { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; border: 1px solid; font-size: 12px; line-height: 1.5; }
+  .atk-tip-icon { font-size: 14px; flex-shrink: 0; }
+
+  /* CTA */
+  .atk-cta { max-width: 900px; margin: 24px auto 0; text-align: center; padding: 32px; background: var(--card); border: 1px solid var(--border); border-radius: 16px; }
+  .atk-cta-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  .atk-cta-sub { font-size: 13px; color: var(--muted-foreground); margin-bottom: 20px; line-height: 1.6; }
+  .atk-cta-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .atk-cta-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 10px 20px; border-radius: 10px; font-family: 'Sora', sans-serif;
+    font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none;
+    transition: all 0.15s;
+  }
+  .atk-cta-btn.primary { background: oklch(0.55 0.12 160); color: white; border: 1px solid oklch(0.55 0.12 160); }
+  .atk-cta-btn.primary:hover { background: oklch(0.6 0.14 160); }
+  .atk-cta-btn.secondary { background: transparent; color: var(--foreground); border: 1px solid var(--border); }
+  .atk-cta-btn.secondary:hover { background: var(--muted); }
+`
+
+// =============================================================================
+// KARTA ÚTOKU
 // =============================================================================
 
 function AttackCard({ attack }: { attack: AttackData }) {
-  const [open, setOpen] = useState(false)
-  const [visibleSteps, setVisibleSteps] = useState<number[]>([])
-  const [animText, setAnimText] = useState("")
-  const [animPrev, setAnimPrev] = useState("")
-  const [progress, setProgress] = useState(0)
-  const animRef = useRef<NodeJS.Timeout | null>(null)
-  const stepTimers = useRef<NodeJS.Timeout[]>([])
+  const [open, setOpen]           = useState(false)
+  const [visible, setVisible]     = useState<number[]>([])
+  const [animText, setAnimText]   = useState("")
+  const [animPrev, setAnimPrev]   = useState("")
+  const [progress, setProgress]   = useState(0)
+  const animRef  = useRef<NodeJS.Timeout | null>(null)
+  const timers   = useRef<NodeJS.Timeout[]>([])
 
   useEffect(() => {
     if (!open) {
-      setVisibleSteps([])
-      setProgress(0)
-      setAnimText("")
-      setAnimPrev("")
+      setVisible([]); setProgress(0); setAnimText(""); setAnimPrev("")
       if (animRef.current) clearInterval(animRef.current)
-      stepTimers.current.forEach(clearTimeout)
-      stepTimers.current = []
+      timers.current.forEach(clearTimeout); timers.current = []
       return
     }
-
-    // Animace kroků
     attack.steps.forEach((_, i) => {
       const t = setTimeout(() => {
-        setVisibleSteps((prev) => [...prev, i])
-        setProgress(Math.round(((i + 1) / attack.steps.length) * 100))
-      }, 300 + i * 500)
-      stepTimers.current.push(t)
+        setVisible(v => [...v, i])
+        setProgress(Math.round(((i+1)/attack.steps.length)*100))
+      }, 250 + i * 480)
+      timers.current.push(t)
     })
-
-    // Textová animace
-    const seq = ANIM_SEQUENCES[attack.animType] || []
+    const seq = ANIM_SEQ[attack.animType] || []
     let idx = 0
-    const run = () => {
-      setAnimPrev(seq[(idx - 1 + seq.length) % seq.length] || "")
-      setAnimText(seq[idx % seq.length])
-      idx++
-    }
-    run()
-    animRef.current = setInterval(run, 900)
-
-    return () => {
-      if (animRef.current) clearInterval(animRef.current)
-      stepTimers.current.forEach(clearTimeout)
-    }
+    const run = () => { setAnimPrev(seq[(idx-1+seq.length)%seq.length]||""); setAnimText(seq[idx%seq.length]); idx++ }
+    run(); animRef.current = setInterval(run, 850)
+    return () => { if (animRef.current) clearInterval(animRef.current); timers.current.forEach(clearTimeout) }
   }, [open, attack])
 
-  const dangerLabel =
-    attack.danger === "Kritické"
-      ? "danger-critical"
-      : attack.danger === "Vysoké"
-      ? "danger-high"
-      : "danger-medium"
+  const ac = attack.accentColor
+  const dangerBg   = ac + "18"
+  const dangerText = ac
 
   return (
     <div
-      className={`attack-card ${open ? "attack-card--open" : ""}`}
-      onClick={() => setOpen((v) => !v)}
+      className={`atk-card ${open ? "open" : ""}`}
+      style={{ borderColor: open ? `${ac}50` : undefined }}
+      onClick={() => setOpen(v => !v)}
     >
-      <div className="attack-card__header">
-        <div className="attack-card__icon" style={{ background: attack.iconBg }}>
-          {attack.icon}
+      <div className="atk-header">
+        <div className="atk-icon" style={{ background: ac + "18" }}>{attack.icon}</div>
+        <div className="atk-info">
+          <div className="atk-title-text">{attack.title}</div>
+          <div className="atk-subtitle">{attack.subtitle}</div>
         </div>
-        <div className="attack-card__info">
-          <div className="attack-card__title">{attack.title}</div>
-          <div className="attack-card__subtitle">{attack.subtitle}</div>
+        <div className="atk-badge-danger" style={{ background: dangerBg, color: dangerText }}>
+          {attack.danger}
         </div>
-        <span className={`attack-card__badge ${dangerLabel}`}>{attack.danger}</span>
       </div>
 
-      <div className="attack-card__hint">
-        <span className={`attack-card__chevron ${open ? "attack-card__chevron--open" : ""}`}>▾</span>
+      <div className="atk-hint">
+        <span className={`atk-chevron ${open ? "open" : ""}`}>▾</span>
         <span>Klikni pro animaci útoku</span>
       </div>
 
-      <div className={`attack-card__scene ${open ? "attack-card__scene--open" : ""}`}>
-        <div className="attack-card__scene-inner">
-          {/* Kroky */}
-          <div className="attack-steps">
+      <div className={`atk-scene ${open ? "open" : ""}`}>
+        <div className="atk-scene-inner">
+          <div className="atk-steps">
             {attack.steps.map((step, i) => (
-              <div
-                key={i}
-                className={`attack-step ${visibleSteps.includes(i) ? "attack-step--visible" : ""}`}
-                style={{ transitionDelay: `${i * 50}ms` }}
-              >
-                {i < attack.steps.length - 1 && <div className="attack-step__line" />}
-                <div
-                  className="attack-step__num"
-                  style={{ background: attack.iconBg, color: attack.tipColor }}
-                >
-                  {i + 1}
-                </div>
-                <div className="attack-step__body">
-                  <div className="attack-step__label">{step.label}</div>
-                  <div className="attack-step__desc">{step.desc}</div>
+              <div key={i} className={`atk-step ${visible.includes(i) ? "visible" : ""}`}>
+                {i < attack.steps.length - 1 && <div className="atk-step-line" />}
+                <div className="atk-step-num" style={{ background: ac + "20", color: ac }}>{i+1}</div>
+                <div className="atk-step-body">
+                  <div className="atk-step-label">{step.label}</div>
+                  <div className="atk-step-desc">{step.desc}</div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Progress bar */}
-          <div className="attack-progress">
-            <div
-              className="attack-progress__fill"
-              style={{ width: `${progress}%`, background: attack.progressColor }}
-            />
+          <div className="atk-progress">
+            <div className="atk-progress-fill" style={{ width:`${progress}%`, background: ac }} />
           </div>
 
-          {/* Animace */}
-          <div className="attack-anim">
-            <div className="attack-anim__label">{attack.animLabel}</div>
-            <div className="attack-anim__content">
-              {animPrev && <span className="attack-anim__prev">{animPrev}</span>}
-              <span className="attack-anim__current">{animText}</span>
-              <span className="attack-anim__cursor" />
+          <div className="atk-terminal">
+            <div className="atk-terminal-bar">
+              <div className="atk-terminal-dot" style={{ background: ac + "80" }} />
+              <div className="atk-terminal-dot" />
+              <div className="atk-terminal-dot" />
+              <span className="atk-terminal-label">{attack.animLabel}</span>
+            </div>
+            <div className="atk-terminal-body">
+              {animPrev && <span className="atk-terminal-prev">{animPrev}</span>}
+              <span className="atk-terminal-cur">
+                {animText}
+                <span className="atk-terminal-cursor" style={{ color: ac }} />
+              </span>
             </div>
           </div>
 
-          {/* Tip */}
-          <div
-            className="attack-tip"
-            style={{ background: attack.tipBg, color: attack.tipColor }}
-          >
-            <span className="attack-tip__icon">🛡️</span>
-            <span>{attack.tipText}</span>
+          <div className="atk-tip" style={{ background: ac + "0d", borderColor: ac + "33", color: ac }}>
+            <span className="atk-tip-icon">🛡</span>
+            <span style={{ color: "var(--foreground)", opacity: 0.85 }}>{attack.tipText}</span>
           </div>
         </div>
       </div>
@@ -392,176 +336,46 @@ function AttackCard({ attack }: { attack: AttackData }) {
 }
 
 // =============================================================================
-// HLAVNÍ STRÁNKA
+// STRÁNKA
 // =============================================================================
 
 export default function UtocniciPage() {
   return (
     <div className="min-h-screen">
       <Navigation />
+      <style>{STYLES}</style>
 
-      <style>{`
-        .attack-card {
-          background: var(--card);
-          border: 0.5px solid var(--border);
-          border-radius: 12px;
-          overflow: hidden;
-          cursor: pointer;
-          transition: border-color 0.2s, transform 0.15s;
-        }
-        .attack-card:hover {
-          border-color: oklch(0.45 0.08 190);
-          transform: translateY(-2px);
-        }
-        .attack-card--open {
-          border-color: oklch(0.45 0.08 190);
-        }
-        .attack-card__header {
-          padding: 16px 20px 10px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .attack-card__icon {
-          width: 38px; height: 38px;
-          border-radius: 8px;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 18px;
-          flex-shrink: 0;
-        }
-        .attack-card__info { flex: 1; min-width: 0; }
-        .attack-card__title { font-size: 15px; font-weight: 500; }
-        .attack-card__subtitle { font-size: 12px; color: var(--muted-foreground); margin-top: 2px; }
-        .attack-card__badge {
-          font-size: 11px; padding: 3px 8px;
-          border-radius: 6px; font-weight: 500;
-          flex-shrink: 0; white-space: nowrap;
-        }
-        .danger-critical { background: oklch(0.97 0.02 30); color: oklch(0.35 0.14 30); }
-        .danger-high { background: oklch(0.97 0.03 80); color: oklch(0.4 0.12 80); }
-        .danger-medium { background: oklch(0.97 0.02 145); color: oklch(0.3 0.1 145); }
-        .attack-card__hint {
-          padding: 0 20px 12px;
-          font-size: 12px; color: var(--muted-foreground);
-          display: flex; align-items: center; gap: 4px;
-        }
-        .attack-card__chevron { transition: transform 0.3s; display: inline-block; }
-        .attack-card__chevron--open { transform: rotate(180deg); }
-        .attack-card__scene {
-          max-height: 0; overflow: hidden;
-          transition: max-height 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .attack-card__scene--open { max-height: 700px; }
-        .attack-card__scene-inner {
-          border-top: 0.5px solid var(--border);
-          padding: 16px 20px 20px;
-        }
-        .attack-steps { display: flex; flex-direction: column; gap: 0; }
-        .attack-step {
-          display: flex; gap: 12px; padding: 10px 0;
-          opacity: 0; transform: translateX(-8px);
-          transition: opacity 0.35s, transform 0.35s;
-          position: relative;
-        }
-        .attack-step--visible { opacity: 1; transform: none; }
-        .attack-step__line {
-          position: absolute; left: 13px; top: 38px;
-          width: 1px; bottom: 0;
-          background: var(--border);
-        }
-        .attack-step__num {
-          width: 28px; height: 28px; border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 12px; font-weight: 500; flex-shrink: 0;
-          position: relative; z-index: 1;
-        }
-        .attack-step__body { flex: 1; padding-top: 3px; }
-        .attack-step__label { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
-        .attack-step__desc { font-size: 12px; color: var(--muted-foreground); line-height: 1.55; }
-        .attack-progress {
-          height: 3px; background: var(--border); border-radius: 2px;
-          overflow: hidden; margin: 14px 0;
-        }
-        .attack-progress__fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
-        .attack-anim {
-          background: var(--muted); border: 0.5px solid var(--border);
-          border-radius: 8px; padding: 12px 14px; min-height: 72px;
-        }
-        .attack-anim__label {
-          font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
-          color: var(--muted-foreground); margin-bottom: 6px;
-        }
-        .attack-anim__prev {
-          display: block; font-family: var(--font-mono, monospace);
-          font-size: 11px; color: var(--muted-foreground); opacity: 0.5;
-          margin-bottom: 2px;
-        }
-        .attack-anim__current {
-          font-family: var(--font-mono, monospace); font-size: 13px;
-        }
-        .attack-anim__cursor {
-          display: inline-block; width: 8px; height: 14px;
-          background: currentColor; vertical-align: middle; margin-left: 2px;
-          animation: blink-cursor 1s infinite;
-        }
-        @keyframes blink-cursor { 0%,100%{opacity:1} 50%{opacity:0} }
-        .attack-tip {
-          margin-top: 14px; padding: 10px 14px; border-radius: 8px;
-          font-size: 12px; line-height: 1.55;
-          display: flex; gap: 8px; align-items: flex-start;
-        }
-        .attack-tip__icon { flex-shrink: 0; font-size: 14px; }
-      `}</style>
-
-      <main className="container mx-auto px-4 py-16">
-        <div className="max-w-5xl mx-auto space-y-12">
-          {/* Header */}
-          <div className="text-center space-y-4">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-destructive/10 border border-destructive/20 text-destructive text-sm font-mono">
-              <span>⚠️</span>
-              <span>Jak útočníci kradou hesla</span>
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-              Metody útoků na hesla
-            </h1>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
-              Klikněte na každou kartu a zjistěte přesně, jak útočníci postupují
-              — krok za krokem, bez technického žargonu.
-            </p>
-          </div>
-
-          {/* Karty */}
-          <div className="grid gap-4 md:grid-cols-2">
-            {ATTACKS.map((attack) => (
-              <AttackCard key={attack.id} attack={attack} />
-            ))}
-          </div>
-
-         {/* CTA */}
-          <div className="text-center p-8 rounded-xl border border-primary/20 bg-card/50 space-y-4">
-            <h2 className="text-2xl font-bold">Teď víte, jak útočníci myslí</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">
-              Nejlepší obrana je silné, unikátní heslo pro každý účet.
-              Otestujte svá stávající hesla nebo si nechte vygenerovat nové.
-            </p>
-            <div className="flex flex-wrap justify-center gap-4 pt-2">
-              <Button asChild size="lg">
-                <Link href="/generator">
-                  <Key className="mr-2 h-5 w-5" />
-                  Vygenerovat bezpečné heslo
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="bg-transparent">
-                <Link href="/test">
-                  <TestTube className="mr-2 h-5 w-5" />
-                  Otestovat sílu hesla
-                </Link>
-              </Button>
-            </div>
-          </div>
-
+      <div className="atk-page">
+        <div className="atk-hero">
+          <div className="atk-badge">⚠ Jak útočníci kradou hesla</div>
+          <h1 className="atk-title">Metody útoků na hesla</h1>
+          <p className="atk-sub">
+            Klikněte na každou kartu a zjistěte přesně, jak útočníci postupují — krok za krokem, bez technického žargonu.
+          </p>
         </div>
-      </main>
+
+        <div className="atk-grid">
+          {ATTACKS.map(a => <AttackCard key={a.id} attack={a} />)}
+        </div>
+
+        <div className="atk-cta">
+          <div className="atk-cta-title">Teď víte, jak útočníci myslí</div>
+          <p className="atk-cta-sub">
+            Nejlepší obrana je silné, unikátní heslo pro každý účet.<br />
+            Otestujte svá stávající hesla nebo si nechte vygenerovat nové.
+          </p>
+          <div className="atk-cta-btns">
+            <Link href="/generator" className="atk-cta-btn primary">
+              <Key style={{width:16,height:16}} />
+              Vygenerovat bezpečné heslo
+            </Link>
+            <Link href="/test" className="atk-cta-btn secondary">
+              <TestTube style={{width:16,height:16}} />
+              Otestovat sílu hesla
+            </Link>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
