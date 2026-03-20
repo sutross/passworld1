@@ -35,29 +35,55 @@ interface RssSource {
 // =============================================================================
 
 const RSS_SOURCES: RssSource[] = [
+  // ===== ČESKÉ ZDROJE =====
   {
-    name: "Bleeping Computer",
-    url: "https://www.bleepingcomputer.com/feed/",
-    proxyUrl: "https://api.allorigins.win/get?url=" + encodeURIComponent("https://www.bleepingcomputer.com/feed/"),
+    name: "NÚKIB",
+    url: "https://www.nukib.cz/cs/rss/",
+    proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.nukib.cz/cs/rss/") + "&count=4",
+    category: "Varování",
+  },
+  {
+    name: "Národní CERT",
+    url: "https://www.csirt.cz/rss/news/",
+    proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.csirt.cz/rss/news/") + "&count=4",
+    category: "CERT",
+  },
+  {
+    name: "Lupa.cz — Bezpečnost",
+    url: "https://www.lupa.cz/rss/clanky/",
+    proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.lupa.cz/rss/clanky/") + "&count=4",
     category: "Zprávy",
   },
   {
-    name: "Krebs on Security",
-    url: "https://krebsonsecurity.com/feed/",
-    proxyUrl: "https://api.allorigins.win/get?url=" + encodeURIComponent("https://krebsonsecurity.com/feed/"),
-    category: "Analýzy",
+    name: "Root.cz — Bezpečnost",
+    url: "https://www.root.cz/rss/clanky/bezpecnost/",
+    proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.root.cz/rss/clanky/bezpecnost/") + "&count=4",
+    category: "Bezpečnost",
+  },
+  {
+    name: "SecurityWorld.cz",
+    url: "https://www.securityworld.cz/rss/",
+    proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.securityworld.cz/rss/") + "&count=4",
+    category: "Bezpečnost",
+  },
+  {
+    name: "Živě.cz — Bezpečnost",
+    url: "https://www.zive.cz/rss/sc-47/",
+    proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.zive.cz/rss/sc-47/") + "&count=4",
+    category: "Zprávy",
+  },
+  // ===== ZAHRANIČNÍ ZDROJE =====
+  {
+    name: "Bleeping Computer",
+    url: "https://www.bleepingcomputer.com/feed/",
+    proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.bleepingcomputer.com/feed/") + "&count=3",
+    category: "Mezinárodní",
   },
   {
     name: "The Hacker News",
     url: "https://feeds.feedburner.com/TheHackersNews",
-    proxyUrl: "https://api.allorigins.win/get?url=" + encodeURIComponent("https://feeds.feedburner.com/TheHackersNews"),
-    category: "Hacking",
-  },
-  {
-    name: "SANS Internet Storm Center",
-    url: "https://isc.sans.edu/rssfeed_full.xml",
-    proxyUrl: "https://api.allorigins.win/get?url=" + encodeURIComponent("https://isc.sans.edu/rssfeed_full.xml"),
-    category: "Hrozby",
+    proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://feeds.feedburner.com/TheHackersNews") + "&count=3",
+    category: "Mezinárodní",
   },
 ]
 
