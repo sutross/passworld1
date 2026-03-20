@@ -1,966 +1,1065 @@
+"use client"
+
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Navigation } from "@/components/navigation"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import {
-  BookOpen,
-  Shield,
-  Key,
-  Lock,
-  Eye,
-  AlertTriangle,
-  Skull,
-  Clock,
-  Database,
-  Cpu,
-  Binary,
-  TrendingUp,
-  Users,
-  Brain,
-  Fingerprint,
-  Server,
-  Zap,
-  Target,
-  FileWarning,
-  ShieldCheck,
-  KeyRound,
-  Smartphone,
-  Globe,
-  ChevronRight,
-  Calculator,
-  Hash,
-  Layers,
-  Network,
-  CheckCircle,
-  XCircle,
-  TestTube,
+  Shield, Key, ExternalLink, RefreshCw, ChevronLeft, ChevronRight,
+  Wifi, Lock, Eye, AlertTriangle, Database, Cpu, Globe, Smartphone,
+  BookOpen, TrendingUp, Users, Brain, Clock, CheckCircle, XCircle,
+  Zap, Server, Hash, Calculator, Layers, ChevronDown, Radio,
 } from "lucide-react"
 
 // =============================================================================
-// EDUCATION PAGE COMPONENT
-// =============================================================================
-// Komplexní vzdělávací stránka o bezpečnosti hesel. Obsahuje 8 hlavních sekcí:
-// 
-// 1. STATISTIKY - Krutá realita úniků dat a jejich dopad
-// 2. TYPY ÚTOKŮ - Brute force, slovníkové, rainbow tables, credential stuffing
-// 3. ENTROPIE - Matematické základy síly hesla s praktickými příklady
-// 4. PSYCHOLOGIE - Proč lidé volí slabá hesla a kognitivní zkreslení
-// 5. BEST PRACTICES - Doporučené postupy pro tvorbu a správu hesel
-// 6. SPRÁVCI HESEL - Přehled a doporučení password managerů
-// 7. MFA - Vícefaktorová autentizace a její typy
-// 8. NAŠE NÁSTROJE - Propojení s funkcemi této aplikace
-//
-// Stránka je statická (Server Component) pro optimální SEO a rychlé načítání.
+// TYPY
 // =============================================================================
 
-export default function EducationPage() {
+interface NewsItem {
+  title: string
+  link: string
+  pubDate: string
+  source: string
+  category: string
+}
+
+interface RssSource {
+  name: string
+  url: string
+  proxyUrl: string
+  category: string
+}
+
+// =============================================================================
+// RSS ZDROJE — proxy přes allorigins.win (CORS bypass)
+// Každý zdroj je spolehlivý kyberbezpečnostní RSS feed
+// =============================================================================
+
+const RSS_SOURCES: RssSource[] = [
+  {
+    name: "Bleeping Computer",
+    url: "https://www.bleepingcomputer.com/feed/",
+    proxyUrl: "https://api.allorigins.win/get?url=" + encodeURIComponent("https://www.bleepingcomputer.com/feed/"),
+    category: "Zprávy",
+  },
+  {
+    name: "Krebs on Security",
+    url: "https://krebsonsecurity.com/feed/",
+    proxyUrl: "https://api.allorigins.win/get?url=" + encodeURIComponent("https://krebsonsecurity.com/feed/"),
+    category: "Analýzy",
+  },
+  {
+    name: "The Hacker News",
+    url: "https://feeds.feedburner.com/TheHackersNews",
+    proxyUrl: "https://api.allorigins.win/get?url=" + encodeURIComponent("https://feeds.feedburner.com/TheHackersNews"),
+    category: "Hacking",
+  },
+  {
+    name: "SANS Internet Storm Center",
+    url: "https://isc.sans.edu/rssfeed_full.xml",
+    proxyUrl: "https://api.allorigins.win/get?url=" + encodeURIComponent("https://isc.sans.edu/rssfeed_full.xml"),
+    category: "Hrozby",
+  },
+]
+
+// Fallback zprávy pokud RSS selže
+const FALLBACK_NEWS: NewsItem[] = [
+  { title: "Kritická zranitelnost v OpenSSL opravena — aktualizujte okamžitě", link: "#", pubDate: new Date().toISOString(), source: "Security Advisory", category: "Zranitelnosti" },
+  { title: "Nová vlna phishingových útoků cílí na české bankovní klienty", link: "#", pubDate: new Date().toISOString(), source: "NÚKIB", category: "Phishing" },
+  { title: "Ransomware skupina LockBit znovu aktivní pod novým názvem", link: "#", pubDate: new Date().toISOString(), source: "Threat Intel", category: "Ransomware" },
+  { title: "Google zavádí passkeys jako výchozí přihlašovací metodu", link: "#", pubDate: new Date().toISOString(), source: "Google Security", category: "Autentizace" },
+  { title: "Databáze 10 miliard hesel unikla na dark web — zkontrolujte svá hesla", link: "#", pubDate: new Date().toISOString(), source: "HIBP", category: "Úniky dat" },
+  { title: "AI nástroje využívány k automatizaci spear-phishing útoků", link: "#", pubDate: new Date().toISOString(), source: "Krebs on Security", category: "AI & Bezpečnost" },
+  { title: "Nová CVE zranitelnost v Apache Log4j — patch vydán", link: "#", pubDate: new Date().toISOString(), source: "CVE Database", category: "Zranitelnosti" },
+  { title: "Europol zlikvidoval infrastrukturu botnet sítě s 500 000 zařízeními", link: "#", pubDate: new Date().toISOString(), source: "Europol", category: "Operace" },
+]
+
+// =============================================================================
+// HOOK: Načítání RSS feedů
+// =============================================================================
+
+function useRssNews() {
+  const [news, setNews] = useState<NewsItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [error, setError] = useState(false)
+
+  const parseRss = useCallback((xmlText: string, sourceName: string, category: string): NewsItem[] => {
+    try {
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(xmlText, "text/xml")
+      const items = Array.from(doc.querySelectorAll("item")).slice(0, 4)
+      return items.map((item) => ({
+        title: item.querySelector("title")?.textContent?.trim() || "Bez názvu",
+        link: item.querySelector("link")?.textContent?.trim() || "#",
+        pubDate: item.querySelector("pubDate")?.textContent?.trim() || new Date().toISOString(),
+        source: sourceName,
+        category,
+      }))
+    } catch {
+      return []
+    }
+  }, [])
+
+  const fetchNews = useCallback(async () => {
+    setLoading(true)
+    setError(false)
+
+    const results: NewsItem[] = []
+    let anySuccess = false
+
+    for (const source of RSS_SOURCES) {
+      try {
+        const response = await fetch(source.proxyUrl, {
+          signal: AbortSignal.timeout(8000),
+        })
+        if (!response.ok) continue
+        const data = await response.json()
+        if (!data.contents) continue
+        const items = parseRss(data.contents, source.name, source.category)
+        if (items.length > 0) {
+          results.push(...items)
+          anySuccess = true
+        }
+      } catch {
+        // Pokračovat na další zdroj
+      }
+    }
+
+    if (anySuccess && results.length > 0) {
+      // Seřadit podle data (nejnovější první)
+      results.sort((a, b) => {
+        try {
+          return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()
+        } catch {
+          return 0
+        }
+      })
+      setNews(results.slice(0, 16))
+    } else {
+      setNews(FALLBACK_NEWS)
+      setError(true)
+    }
+
+    setLastUpdated(new Date())
+    setLoading(false)
+  }, [parseRss])
+
+  useEffect(() => {
+    fetchNews()
+    // Refresh každých 30 minut
+    const interval = setInterval(fetchNews, 30 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [fetchNews])
+
+  return { news, loading, lastUpdated, error, refresh: fetchNews }
+}
+
+// =============================================================================
+// KOMPONENTA: News Ticker (scrollující linka nahoře)
+// =============================================================================
+
+function NewsTicker({ news }: { news: NewsItem[] }) {
+  const tickerRef = useRef<HTMLDivElement>(null)
+
+  if (news.length === 0) return null
+
+  const items = [...news, ...news] // Duplikace pro plynulý loop
+
+  return (
+    <div className="news-ticker-wrap">
+      <div className="news-ticker-label">
+        <Radio className="h-3 w-3" />
+        <span>LIVE</span>
+      </div>
+      <div className="news-ticker-track" ref={tickerRef}>
+        <div className="news-ticker-inner">
+          {items.map((item, i) => (
+            <a
+              key={i}
+              href={item.link !== "#" ? item.link : undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="news-ticker-item"
+            >
+              <span className="news-ticker-cat">{item.category}</span>
+              <span className="news-ticker-title">{item.title}</span>
+              <span className="news-ticker-sep">◆</span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// KOMPONENTA: News Slideshow
+// =============================================================================
+
+function NewsSlideshow({ news, loading, lastUpdated, error, onRefresh }: {
+  news: NewsItem[]
+  loading: boolean
+  lastUpdated: Date | null
+  error: boolean
+  onRefresh: () => void
+}) {
+  const [current, setCurrent] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(true)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  const items = news.length > 0 ? news.slice(0, 8) : FALLBACK_NEWS.slice(0, 8)
+
+  const next = useCallback(() => setCurrent(c => (c + 1) % items.length), [items.length])
+  const prev = useCallback(() => setCurrent(c => (c - 1 + items.length) % items.length), [items.length])
+
+  useEffect(() => {
+    if (!isPlaying) { if (intervalRef.current) clearInterval(intervalRef.current); return }
+    intervalRef.current = setInterval(next, 5000)
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [isPlaying, next])
+
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString("cs-CZ", { day: "numeric", month: "short", year: "numeric" })
+    } catch { return "" }
+  }
+
+  const item = items[current]
+
+  return (
+    <div className="slideshow">
+      {/* Header */}
+      <div className="slideshow-header">
+        <div className="slideshow-title-row">
+          <div className="slideshow-live-dot" />
+          <span className="slideshow-section-label">Aktuální zprávy z kyberbezpečnosti</span>
+          {error && <span className="slideshow-offline-badge">offline — záloha</span>}
+        </div>
+        <div className="slideshow-controls-row">
+          {lastUpdated && (
+            <span className="slideshow-updated">
+              Aktualizováno: {lastUpdated.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="slideshow-refresh-btn"
+            title="Načíst nové zprávy"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Hlavní karta */}
+      <div className="slide-card" onClick={() => item.link !== "#" && window.open(item.link, "_blank")}>
+        {loading ? (
+          <div className="slide-loading">
+            <div className="slide-loading-spinner" />
+            <span>Načítám nejnovější zprávy...</span>
+          </div>
+        ) : (
+          <>
+            <div className="slide-meta">
+              <span className="slide-cat">{item.category}</span>
+              <span className="slide-source">{item.source}</span>
+              <span className="slide-date">{formatDate(item.pubDate)}</span>
+            </div>
+            <h2 className="slide-title">{item.title}</h2>
+            {item.link !== "#" && (
+              <div className="slide-link">
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span>Číst celý článek</span>
+              </div>
+            )}
+            <div className="slide-progress">
+              <div
+                className="slide-progress-fill"
+                style={{ animationDuration: isPlaying ? "5s" : "0s", animationPlayState: isPlaying ? "running" : "paused" }}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Navigace */}
+      <div className="slideshow-nav">
+        <button onClick={prev} className="slide-nav-btn">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="slide-dots">
+          {items.map((_, i) => (
+            <button
+              key={i}
+              className={`slide-dot ${i === current ? "slide-dot--active" : ""}`}
+              onClick={() => setCurrent(i)}
+            />
+          ))}
+        </div>
+        <button onClick={next} className="slide-nav-btn">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => setIsPlaying(v => !v)}
+          className={`slide-play-btn ${isPlaying ? "slide-play-btn--active" : ""}`}
+        >
+          {isPlaying ? "⏸" : "▶"}
+        </button>
+      </div>
+
+      {/* Grid dalších zpráv */}
+      <div className="news-grid">
+        {items.slice(0, 6).map((n, i) => (
+          <a
+            key={i}
+            href={n.link !== "#" ? n.link : undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`news-card ${i === current ? "news-card--active" : ""}`}
+            onClick={() => setCurrent(i)}
+          >
+            <span className="news-card-cat">{n.category}</span>
+            <span className="news-card-title">{n.title}</span>
+            <span className="news-card-source">{n.source} · {formatDate(n.pubDate)}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// KOMPONENTA: Sekce osvěty — accordion styl
+// =============================================================================
+
+interface OsvetaSection {
+  id: string
+  icon: React.ReactNode
+  title: string
+  color: string
+  content: React.ReactNode
+}
+
+function OsvetaAccordion({ sections }: { sections: OsvetaSection[] }) {
+  const [open, setOpen] = useState<string | null>(null)
+
+  return (
+    <div className="osveta-accordion">
+      {sections.map((s) => (
+        <div key={s.id} className={`osveta-item ${open === s.id ? "osveta-item--open" : ""}`}>
+          <button
+            className="osveta-trigger"
+            onClick={() => setOpen(open === s.id ? null : s.id)}
+          >
+            <div className="osveta-trigger-left">
+              <div className="osveta-icon" style={{ background: s.color + "22", color: s.color }}>
+                {s.icon}
+              </div>
+              <span className="osveta-title">{s.title}</span>
+            </div>
+            <ChevronDown className={`osveta-chevron ${open === s.id ? "osveta-chevron--open" : ""}`} />
+          </button>
+          <div className={`osveta-body ${open === s.id ? "osveta-body--open" : ""}`}>
+            <div className="osveta-content">{s.content}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// =============================================================================
+// OBSAH OSVĚTOVÝCH SEKCÍ
+// =============================================================================
+
+const OSVETA_SECTIONS: OsvetaSection[] = [
+  {
+    id: "co-je-silne-heslo",
+    icon: <Key className="h-5 w-5" />,
+    title: "Co dělá heslo skutečně silným?",
+    color: "#10b981",
+    content: (
+      <div className="osveta-grid-2">
+        <div>
+          <h4 className="osveta-h4">Tři pilíře silného hesla</h4>
+          <div className="osveta-pillars">
+            {[
+              { label: "Délka", value: "12+ znaků", desc: "Každý znak exponenciálně zvyšuje počet kombinací", icon: "📏", good: true },
+              { label: "Náhodnost", value: "Bez vzorů", desc: "Žádná jména, data, slova ze slovníku", icon: "🎲", good: true },
+              { label: "Unikátnost", value: "1 heslo = 1 účet", desc: "Jeden únik nesmí kompromitovat vše ostatní", icon: "🔑", good: true },
+            ].map((p) => (
+              <div key={p.label} className="osveta-pillar">
+                <span className="osveta-pillar-icon">{p.icon}</span>
+                <div>
+                  <div className="osveta-pillar-label">{p.label}: <strong>{p.value}</strong></div>
+                  <div className="osveta-pillar-desc">{p.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <h4 className="osveta-h4">Příklady síly hesla</h4>
+          <div className="osveta-examples">
+            {[
+              { pwd: "heslo123", strength: 5, label: "Katastrofické", color: "#ef4444" },
+              { pwd: "Heslo123!", strength: 20, label: "Velmi slabé", color: "#f97316" },
+              { pwd: "M0jePsíč3kR3x!", strength: 55, label: "Průměrné", color: "#eab308" },
+              { pwd: "xK9#mPq2$xLwR4@n", strength: 92, label: "Silné", color: "#10b981" },
+              { pwd: "kočka-tramvaj-modrý-klavír-7", strength: 98, label: "Vynikající passphrase", color: "#06b6d4" },
+            ].map((e) => (
+              <div key={e.pwd} className="osveta-example">
+                <code className="osveta-example-pwd">{e.pwd}</code>
+                <div className="osveta-example-bar-wrap">
+                  <div className="osveta-example-bar" style={{ width: `${e.strength}%`, background: e.color }} />
+                </div>
+                <span className="osveta-example-label" style={{ color: e.color }}>{e.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "entropie",
+    icon: <Calculator className="h-5 w-5" />,
+    title: "Entropie: matematika za bezpečností hesla",
+    color: "#06b6d4",
+    content: (
+      <div className="osveta-grid-2">
+        <div>
+          <h4 className="osveta-h4">Co je entropie?</h4>
+          <p className="osveta-p">Entropie měří nepředvídatelnost hesla v bitech. Více bitů = více pokusů útočník potřebuje = bezpečnější heslo.</p>
+          <div className="osveta-formula">
+            <div className="osveta-formula-title">Zjednodušený vzorec:</div>
+            <div className="osveta-formula-eq">H ≈ L × log₂(C)</div>
+            <div className="osveta-formula-vars">
+              <span><strong>H</strong> = entropie v bitech</span>
+              <span><strong>L</strong> = délka hesla</span>
+              <span><strong>C</strong> = velikost znakové sady</span>
+            </div>
+          </div>
+          <div className="osveta-charsets">
+            {[
+              { chars: "a–z", size: 26, color: "#ef4444" },
+              { chars: "a–z, A–Z", size: 52, color: "#f97316" },
+              { chars: "a–z, A–Z, 0–9", size: 62, color: "#eab308" },
+              { chars: "vše vč. !@#$%", size: 95, color: "#10b981" },
+            ].map((c) => (
+              <div key={c.chars} className="osveta-charset">
+                <code className="osveta-charset-chars">{c.chars}</code>
+                <div className="osveta-charset-bar-wrap">
+                  <div className="osveta-charset-bar" style={{ width: `${(c.size / 95) * 100}%`, background: c.color }} />
+                </div>
+                <span style={{ color: c.color, fontSize: "12px", fontWeight: 500 }}>{c.size} znaků</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <h4 className="osveta-h4">Čas prolomení podle entropie</h4>
+          <div className="osveta-crack-table">
+            {[
+              { bits: "< 40", rating: "Kriticky slabé", time: "Sekundy", color: "#ef4444" },
+              { bits: "40–60", rating: "Slabé", time: "Hodiny až dny", color: "#f97316" },
+              { bits: "60–80", rating: "Dobré", time: "Roky", color: "#eab308" },
+              { bits: "80–128", rating: "Silné", time: "Miliony let", color: "#10b981" },
+              { bits: "> 128", rating: "Vojenská úroveň", time: "Věk vesmíru+", color: "#06b6d4" },
+            ].map((r) => (
+              <div key={r.bits} className="osveta-crack-row">
+                <span className="osveta-crack-bits" style={{ color: r.color }}>{r.bits} b</span>
+                <span className="osveta-crack-rating" style={{ color: r.color }}>{r.rating}</span>
+                <span className="osveta-crack-time">{r.time}</span>
+              </div>
+            ))}
+          </div>
+          <div className="osveta-note">
+            ⚡ GPU (RTX 4090) zvládne ~10 miliard MD5 hashů za sekundu
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "typy-utoku",
+    icon: <AlertTriangle className="h-5 w-5" />,
+    title: "Jak útočníci kradou hesla",
+    color: "#ef4444",
+    content: (
+      <div className="osveta-attacks">
+        {[
+          {
+            name: "Brute Force", icon: "⚡", color: "#ef4444",
+            desc: "Systematické zkoušení každé kombinace. Moderní GPU: 10 miliard pokusů/s.",
+            obrana: "Heslo 12+ znaků → miliardy let prolomení",
+          },
+          {
+            name: "Slovníkový útok", icon: "📖", color: "#f97316",
+            desc: "Zkouší miliony reálných hesel z uniklých databází (RockYou: 14M hesel) + variace.",
+            obrana: "Žádná slovní hesla, žádné vzory jako Heslo123!",
+          },
+          {
+            name: "Phishing", icon: "🎣", color: "#eab308",
+            desc: "Falešná přihlašovací stránka — zadáte heslo sami. Nejsilnější heslo nepomůže.",
+            obrana: "Vždy zkontrolujte URL. Hardwarový klíč (FIDO2).",
+          },
+          {
+            name: "Credential Stuffing", icon: "📋", color: "#8b5cf6",
+            desc: "Uniklé heslo z webu A zkouší bot automaticky na webech B, C, D…",
+            obrana: "Každý účet musí mít unikátní heslo. Správce hesel.",
+          },
+          {
+            name: "Rainbow Tables", icon: "🌈", color: "#06b6d4",
+            desc: "Předpočítané tabulky hashů — prolomení trvá milisekundy, ne hodiny.",
+            obrana: "Weby musí používat salt + moderní hashování (bcrypt, Argon2).",
+          },
+          {
+            name: "Keylogger", icon: "🖱️", color: "#10b981",
+            desc: "Malware zachytává každé stisknutí klávesy. Běží neviditelně na pozadí.",
+            obrana: "Aktuální antivirus. FIDO2 klíč zachrání účet i při keyloggeru.",
+          },
+        ].map((a) => (
+          <div key={a.name} className="osveta-attack-card" style={{ borderColor: a.color + "44" }}>
+            <div className="osveta-attack-header">
+              <span className="osveta-attack-icon">{a.icon}</span>
+              <span className="osveta-attack-name" style={{ color: a.color }}>{a.name}</span>
+            </div>
+            <p className="osveta-attack-desc">{a.desc}</p>
+            <div className="osveta-attack-obrana">
+              <Shield className="h-3.5 w-3.5" style={{ color: a.color }} />
+              <span>{a.obrana}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    ),
+  },
+  {
+    id: "best-practices",
+    icon: <CheckCircle className="h-5 w-5" />,
+    title: "Doporučené postupy — co dělat a čemu se vyhýbat",
+    color: "#10b981",
+    content: (
+      <div className="osveta-grid-2">
+        <div>
+          <h4 className="osveta-h4 osveta-h4--green">✓ Co dělat</h4>
+          {[
+            "Minimálně 12–16 znaků na každé heslo",
+            "Passphrase: náhodná slova oddělená pomlčkou",
+            "Unikátní heslo pro každý jednotlivý účet",
+            "Správce hesel (Bitwarden, 1Password, KeePassXC)",
+            "Dvoufaktorová autentizace (2FA) všude kde je",
+            "Pravidelná kontrola v databázích úniků (HIBP)",
+            "Hardwarový klíč (YubiKey) pro kritické účty",
+          ].map((item) => (
+            <div key={item} className="osveta-do-item">
+              <CheckCircle className="h-4 w-4 osveta-do-icon" />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+        <div>
+          <h4 className="osveta-h4 osveta-h4--red">✗ Čemu se vyhýbat</h4>
+          {[
+            "Slovníková slova, jména, místa v heslech",
+            "Osobní informace (datum narození, jméno mazlíčka)",
+            "Sekvence: 123456, qwerty, abcdef",
+            "Substituces: @ místo a, 3 místo e — jsou ve slovnících",
+            "Stejné heslo na více místech",
+            "Ukládání hesel v prohlížeči bez masterkey",
+            "Posílání hesel přes SMS, e-mail, chat",
+          ].map((item) => (
+            <div key={item} className="osveta-dont-item">
+              <XCircle className="h-4 w-4 osveta-dont-icon" />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "spravci-hesel",
+    icon: <Database className="h-5 w-5" />,
+    title: "Správci hesel — proč a který vybrat",
+    color: "#3b82f6",
+    content: (
+      <div>
+        <p className="osveta-p">Správce hesel vygeneruje a zapamatuje silné unikátní heslo pro každý účet. Vy si pamatujete jen jedno hlavní heslo.</p>
+        <div className="osveta-managers">
+          {[
+            { name: "Bitwarden", type: "Open-source, cloud", price: "Zdarma / Premium", pros: ["Auditovaný kód", "E2E šifrování", "Sdílení hesel"], best: true },
+            { name: "1Password", type: "Komerční, cloud", price: "~3 $/měsíc", pros: ["Travel mode", "Watchtower", "Rodinné plány"], best: false },
+            { name: "KeePassXC", type: "Open-source, lokální", price: "Zdarma", pros: ["Offline databáze", "Žádný cloud", "Maximální kontrola"], best: false },
+            { name: "Proton Pass", type: "Open-source, cloud", price: "Zdarma / Plus", pros: ["Aliasy e-mailů", "Švýcarské servery", "Zero-knowledge"], best: false },
+          ].map((m) => (
+            <div key={m.name} className={`osveta-manager-card ${m.best ? "osveta-manager-card--best" : ""}`}>
+              {m.best && <div className="osveta-manager-badge">Doporučujeme</div>}
+              <div className="osveta-manager-name">{m.name}</div>
+              <div className="osveta-manager-type">{m.type}</div>
+              <div className="osveta-manager-price">{m.price}</div>
+              <div className="osveta-manager-pros">
+                {m.pros.map((p) => <div key={p} className="osveta-manager-pro">✓ {p}</div>)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "mfa",
+    icon: <Smartphone className="h-5 w-5" />,
+    title: "Vícefaktorová autentizace (MFA / 2FA)",
+    color: "#8b5cf6",
+    content: (
+      <div>
+        <p className="osveta-p">MFA přidává druhý faktor — i se správným heslem se útočník nedostane dovnitř bez fyzického přístupu k vašemu zařízení.</p>
+        <div className="osveta-mfa-levels">
+          {[
+            { rank: 1, name: "Hardwarový klíč (FIDO2/WebAuthn)", desc: "YubiKey, Google Titan. Fyzický token, odolný phishingu. Nejbezpečnější.", level: "Nejvyšší", color: "#10b981" },
+            { rank: 2, name: "Autentizační aplikace (TOTP)", desc: "Google Authenticator, Authy, Aegis. Časové kódy generované offline.", level: "Vysoká", color: "#06b6d4" },
+            { rank: 3, name: "Push notifikace", desc: "Microsoft Authenticator, Duo. Potvrzení na telefonu při přihlášení.", level: "Střední", color: "#3b82f6" },
+            { rank: 4, name: "SMS kódy", desc: "Jednorázový kód přes SMS. Lepší než nic — ale zranitelné SIM swappingem.", level: "Nízká", color: "#f97316" },
+          ].map((f) => (
+            <div key={f.rank} className="osveta-mfa-row">
+              <div className="osveta-mfa-rank" style={{ background: f.color + "22", color: f.color }}>#{f.rank}</div>
+              <div className="osveta-mfa-body">
+                <div className="osveta-mfa-name">{f.name}</div>
+                <div className="osveta-mfa-desc">{f.desc}</div>
+              </div>
+              <div className="osveta-mfa-level" style={{ color: f.color }}>{f.level}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "statistiky",
+    icon: <TrendingUp className="h-5 w-5" />,
+    title: "Statistiky a realita úniků dat",
+    color: "#f97316",
+    content: (
+      <div>
+        <div className="osveta-stats">
+          {[
+            { value: "81 %", label: "úniků dat způsobeno slabými nebo ukradenými hesly", source: "Verizon DBIR 2023" },
+            { value: "65 %", label: "lidí používá stejné heslo na více místech", source: "Google Security Survey" },
+            { value: "600M+", label: "uniklých hesel v databázi HaveIBeenPwned", source: "HIBP" },
+            { value: "$4.35M", label: "průměrná cena úniku dat pro organizaci", source: "IBM 2023" },
+          ].map((s) => (
+            <div key={s.value} className="osveta-stat-card">
+              <div className="osveta-stat-value">{s.value}</div>
+              <div className="osveta-stat-label">{s.label}</div>
+              <div className="osveta-stat-source">Zdroj: {s.source}</div>
+            </div>
+          ))}
+        </div>
+        <h4 className="osveta-h4" style={{ marginTop: "1.5rem" }}>Největší úniky v historii</h4>
+        <div className="osveta-breaches">
+          {[
+            { name: "Collection #1–5", year: "2019", count: "2,2 miliardy", desc: "kombinací email/heslo" },
+            { name: "Yahoo", year: "2013–14", count: "3 miliardy", desc: "účtů kompromitováno" },
+            { name: "LinkedIn", year: "2012/21", count: "700 milionů", desc: "profilů vystaveno" },
+            { name: "Facebook", year: "2019", count: "533 milionů", desc: "uživatelských záznamů" },
+            { name: "RockYou2024", year: "2024", count: "10 miliard", desc: "hesel v jediném souboru" },
+          ].map((b) => (
+            <div key={b.name} className="osveta-breach-row">
+              <span className="osveta-breach-year">{b.year}</span>
+              <span className="osveta-breach-name">{b.name}</span>
+              <span className="osveta-breach-count">{b.count}</span>
+              <span className="osveta-breach-desc">{b.desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+  },
+]
+
+// =============================================================================
+// CSS STYLY
+// =============================================================================
+
+const PAGE_STYLES = `
+  /* ===== NEWS TICKER ===== */
+  .news-ticker-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: oklch(0.12 0.02 160);
+    border-bottom: 1px solid oklch(0.55 0.12 160 / 0.3);
+    height: 36px;
+    overflow: hidden;
+    position: sticky;
+    top: 64px;
+    z-index: 40;
+  }
+  .news-ticker-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 12px;
+    background: oklch(0.55 0.12 160);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    height: 100%;
+    flex-shrink: 0;
+  }
+  .news-ticker-track { flex: 1; overflow: hidden; height: 100%; }
+  .news-ticker-inner {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 100%;
+    animation: ticker-scroll 60s linear infinite;
+    white-space: nowrap;
+    width: max-content;
+  }
+  @keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .news-ticker-inner:hover { animation-play-state: paused; }
+  .news-ticker-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 20px 0 0;
+    font-size: 12px;
+    color: oklch(0.85 0.01 180);
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .news-ticker-item:hover { color: oklch(0.55 0.12 160); }
+  .news-ticker-cat {
+    font-size: 10px;
+    font-weight: 700;
+    color: oklch(0.55 0.12 160);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: oklch(0.55 0.12 160 / 0.15);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .news-ticker-title { max-width: 400px; overflow: hidden; text-overflow: ellipsis; }
+  .news-ticker-sep { color: oklch(0.35 0.04 180); }
+
+  /* ===== SLIDESHOW ===== */
+  .slideshow {
+    background: var(--card);
+    border: 0.5px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    padding: 20px;
+  }
+  .slideshow-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .slideshow-title-row { display: flex; align-items: center; gap: 8px; }
+  .slideshow-live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: oklch(0.55 0.12 160);
+    animation: pulse-live 2s ease-in-out infinite;
+  }
+  @keyframes pulse-live {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+  .slideshow-section-label { font-size: 13px; font-weight: 500; color: var(--muted-foreground); }
+  .slideshow-offline-badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    background: oklch(0.5 0.18 30 / 0.15);
+    color: oklch(0.5 0.18 30);
+  }
+  .slideshow-controls-row { display: flex; align-items: center; gap: 8px; }
+  .slideshow-updated { font-size: 11px; color: var(--muted-foreground); }
+  .slideshow-refresh-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 6px;
+    background: transparent; border: 0.5px solid var(--border);
+    color: var(--muted-foreground); cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .slideshow-refresh-btn:hover { background: var(--muted); color: var(--foreground); }
+  .slideshow-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .slide-card {
+    background: oklch(0.12 0.02 200);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    min-height: 140px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .slide-card:hover { border-color: oklch(0.55 0.12 160 / 0.5); }
+  .slide-loading { display: flex; align-items: center; gap: 12px; color: var(--muted-foreground); font-size: 14px; padding: 20px 0; }
+  .slide-loading-spinner {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 2px solid var(--border);
+    border-top-color: oklch(0.55 0.12 160);
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .slide-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .slide-cat {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    background: oklch(0.55 0.12 160 / 0.2); color: oklch(0.65 0.12 160);
+    padding: 2px 8px; border-radius: 4px;
+  }
+  .slide-source { font-size: 12px; color: var(--muted-foreground); }
+  .slide-date { font-size: 11px; color: var(--muted-foreground); margin-left: auto; }
+  .slide-title { font-size: 18px; font-weight: 600; line-height: 1.4; margin-bottom: 12px; }
+  .slide-link { display: flex; align-items: center; gap: 4px; font-size: 12px; color: oklch(0.55 0.12 160); }
+  .slide-progress {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 2px; background: var(--border);
+  }
+  .slide-progress-fill {
+    height: 100%; background: oklch(0.55 0.12 160);
+    animation: progress-fill linear forwards;
+    transform-origin: left;
+  }
+  @keyframes progress-fill { from { width: 0% } to { width: 100% } }
+
+  .slideshow-nav {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
+  }
+  .slide-nav-btn {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--muted); border: 0.5px solid var(--border);
+    color: var(--foreground); cursor: pointer;
+    transition: background 0.15s;
+  }
+  .slide-nav-btn:hover { background: var(--accent); }
+  .slide-dots { display: flex; align-items: center; gap: 4px; flex: 1; justify-content: center; }
+  .slide-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--border); border: none; cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+  }
+  .slide-dot--active { background: oklch(0.55 0.12 160); transform: scale(1.4); }
+  .slide-play-btn {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--muted); border: 0.5px solid var(--border);
+    cursor: pointer; font-size: 12px; transition: background 0.15s;
+  }
+  .slide-play-btn--active { background: oklch(0.55 0.12 160 / 0.2); }
+
+  .news-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;
+  }
+  .news-card {
+    background: oklch(0.14 0.02 200);
+    border: 0.5px solid var(--border);
+    border-radius: 8px; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 4px;
+    cursor: pointer; text-decoration: none;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .news-card:hover, .news-card--active {
+    border-color: oklch(0.55 0.12 160 / 0.6);
+    background: oklch(0.55 0.12 160 / 0.08);
+  }
+  .news-card-cat { font-size: 10px; font-weight: 700; color: oklch(0.55 0.12 160); text-transform: uppercase; letter-spacing: 0.06em; }
+  .news-card-title { font-size: 12px; line-height: 1.45; color: var(--foreground); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .news-card-source { font-size: 10px; color: var(--muted-foreground); margin-top: auto; }
+
+  /* ===== OSVĚTA ACCORDION ===== */
+  .osveta-accordion { display: flex; flex-direction: column; gap: 8px; }
+  .osveta-item {
+    background: var(--card);
+    border: 0.5px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .osveta-item--open { border-color: oklch(0.45 0.08 190 / 0.6); }
+  .osveta-trigger {
+    width: 100%; display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; background: transparent; border: none; cursor: pointer;
+    text-align: left; transition: background 0.15s;
+  }
+  .osveta-trigger:hover { background: var(--muted); }
+  .osveta-trigger-left { display: flex; align-items: center; gap: 12px; }
+  .osveta-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .osveta-title { font-size: 15px; font-weight: 500; text-align: left; }
+  .osveta-chevron { width: 18px; height: 18px; color: var(--muted-foreground); transition: transform 0.3s; flex-shrink: 0; }
+  .osveta-chevron--open { transform: rotate(180deg); }
+  .osveta-body { max-height: 0; overflow: hidden; transition: max-height 0.4s cubic-bezier(0.4,0,0.2,1); }
+  .osveta-body--open { max-height: 2000px; }
+  .osveta-content { padding: 0 20px 20px; border-top: 0.5px solid var(--border); padding-top: 16px; }
+
+  /* ===== OSVĚTA CONTENT STYLES ===== */
+  .osveta-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 640px) { .osveta-grid-2 { grid-template-columns: 1fr; } .news-grid { grid-template-columns: 1fr 1fr; } }
+  .osveta-h4 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.06em; }
+  .osveta-h4--green { color: oklch(0.5 0.12 160); }
+  .osveta-h4--red { color: oklch(0.5 0.18 30); }
+  .osveta-p { font-size: 14px; color: var(--muted-foreground); line-height: 1.6; margin-bottom: 16px; }
+
+  .osveta-pillars { display: flex; flex-direction: column; gap: 10px; }
+  .osveta-pillar { display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: var(--muted); border-radius: 8px; }
+  .osveta-pillar-icon { font-size: 20px; flex-shrink: 0; }
+  .osveta-pillar-label { font-size: 13px; font-weight: 500; }
+  .osveta-pillar-desc { font-size: 12px; color: var(--muted-foreground); margin-top: 2px; }
+
+  .osveta-examples { display: flex; flex-direction: column; gap: 8px; }
+  .osveta-example { display: flex; align-items: center; gap: 8px; }
+  .osveta-example-pwd { font-size: 12px; font-family: monospace; min-width: 160px; color: var(--foreground); }
+  .osveta-example-bar-wrap { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .osveta-example-bar { height: 100%; border-radius: 2px; transition: width 0.5s; }
+  .osveta-example-label { font-size: 11px; font-weight: 500; min-width: 120px; text-align: right; }
+
+  .osveta-formula { background: oklch(0.12 0.02 220); border: 0.5px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+  .osveta-formula-title { font-size: 11px; color: var(--muted-foreground); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .osveta-formula-eq { font-size: 20px; font-family: monospace; font-weight: 600; color: oklch(0.65 0.12 160); margin-bottom: 8px; }
+  .osveta-formula-vars { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted-foreground); }
+
+  .osveta-charsets { display: flex; flex-direction: column; gap: 8px; }
+  .osveta-charset { display: flex; align-items: center; gap: 8px; }
+  .osveta-charset-chars { font-family: monospace; font-size: 12px; min-width: 120px; }
+  .osveta-charset-bar-wrap { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .osveta-charset-bar { height: 100%; border-radius: 2px; }
+
+  .osveta-crack-table { display: flex; flex-direction: column; gap: 4px; }
+  .osveta-crack-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--muted); border-radius: 6px; font-size: 13px; }
+  .osveta-crack-bits { font-family: monospace; font-weight: 600; min-width: 60px; }
+  .osveta-crack-rating { font-weight: 500; flex: 1; }
+  .osveta-crack-time { font-size: 12px; color: var(--muted-foreground); }
+  .osveta-note { margin-top: 10px; font-size: 11px; color: var(--muted-foreground); background: var(--muted); padding: 8px 12px; border-radius: 6px; }
+
+  .osveta-attacks { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+  .osveta-attack-card { background: var(--muted); border: 0.5px solid; border-radius: 10px; padding: 14px; }
+  .osveta-attack-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .osveta-attack-icon { font-size: 18px; }
+  .osveta-attack-name { font-size: 14px; font-weight: 600; }
+  .osveta-attack-desc { font-size: 12px; color: var(--muted-foreground); line-height: 1.5; margin-bottom: 8px; }
+  .osveta-attack-obrana { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; color: var(--foreground); background: oklch(0.14 0.02 200); padding: 8px 10px; border-radius: 6px; }
+
+  .osveta-do-item, .osveta-dont-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
+  .osveta-do-item:last-child, .osveta-dont-item:last-child { border-bottom: none; }
+  .osveta-do-icon { color: oklch(0.55 0.12 160); flex-shrink: 0; margin-top: 2px; }
+  .osveta-dont-icon { color: oklch(0.5 0.18 30); flex-shrink: 0; margin-top: 2px; }
+
+  .osveta-managers { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 16px; }
+  .osveta-manager-card { background: var(--muted); border: 0.5px solid var(--border); border-radius: 10px; padding: 14px; position: relative; }
+  .osveta-manager-card--best { border-color: oklch(0.55 0.12 160 / 0.5); background: oklch(0.55 0.12 160 / 0.06); }
+  .osveta-manager-badge { position: absolute; top: -8px; right: 10px; background: oklch(0.55 0.12 160); color: white; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+  .osveta-manager-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .osveta-manager-type { font-size: 11px; color: var(--muted-foreground); margin-bottom: 4px; }
+  .osveta-manager-price { font-size: 12px; font-weight: 500; margin-bottom: 10px; color: oklch(0.65 0.12 160); }
+  .osveta-manager-pro { font-size: 12px; color: var(--muted-foreground); padding: 2px 0; }
+
+  .osveta-mfa-levels { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .osveta-mfa-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: var(--muted); border-radius: 8px; }
+  .osveta-mfa-rank { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .osveta-mfa-body { flex: 1; }
+  .osveta-mfa-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+  .osveta-mfa-desc { font-size: 12px; color: var(--muted-foreground); line-height: 1.5; }
+  .osveta-mfa-level { font-size: 12px; font-weight: 600; flex-shrink: 0; }
+
+  .osveta-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .osveta-stat-card { background: var(--muted); border: 0.5px solid var(--border); border-radius: 10px; padding: 16px; }
+  .osveta-stat-value { font-size: 28px; font-weight: 700; color: oklch(0.65 0.12 160); margin-bottom: 4px; }
+  .osveta-stat-label { font-size: 12px; color: var(--foreground); line-height: 1.4; margin-bottom: 8px; }
+  .osveta-stat-source { font-size: 10px; color: var(--muted-foreground); }
+
+  .osveta-breaches { display: flex; flex-direction: column; gap: 4px; }
+  .osveta-breach-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--muted); border-radius: 6px; font-size: 13px; flex-wrap: wrap; }
+  .osveta-breach-year { font-family: monospace; font-size: 11px; color: var(--muted-foreground); min-width: 60px; }
+  .osveta-breach-name { font-weight: 500; min-width: 120px; }
+  .osveta-breach-count { font-weight: 700; color: oklch(0.5 0.18 30); min-width: 100px; }
+  .osveta-breach-desc { font-size: 12px; color: var(--muted-foreground); }
+`
+
+// =============================================================================
+// HLAVNÍ STRÁNKA
+// =============================================================================
+
+export default function OsvetaNewPage() {
+  const { news, loading, lastUpdated, error, refresh } = useRssNews()
+
   return (
     <div className="min-h-screen">
       <Navigation />
+      <style>{PAGE_STYLES}</style>
 
-      <main className="container mx-auto px-4 py-16">
-        <div className="max-w-5xl mx-auto space-y-16">
-          {/* ===== HEADER SECTION ===== */}
+      {/* Live news ticker */}
+      {!loading && news.length > 0 && <NewsTicker news={news} />}
+
+      <main className="container mx-auto px-4 py-10">
+        <div className="max-w-5xl mx-auto space-y-10">
+
+          {/* Hlavička */}
           <div className="text-center space-y-4">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-mono">
-              <BookOpen className="h-4 w-4" />
-              <span>Komplexní průvodce bezpečností hesel</span>
+              <Radio className="h-4 w-4" />
+              <span>Živé zprávy + vzdělávání</span>
             </div>
-
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">Svět hesel: Kompletní osvěta</h1>
-            <p className="text-muted-foreground text-lg max-w-3xl mx-auto text-balance leading-relaxed">
-              Pochopte, proč jsou hesla kritickým prvkem vaší digitální bezpečnosti, jaké hrozby existují a jak se před
-              nimi efektivně chránit.
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
+              Svět kybernetické bezpečnosti
+            </h1>
+            <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
+              Aktuální zprávy z kyberbezpečnosti v reálném čase a kompletní průvodce ochranou vašich hesel.
             </p>
           </div>
 
-          {/* ===== TABLE OF CONTENTS ===== */}
-          {/* Interaktivní obsah s anchor linky pro rychlou navigaci */}
-          <Card className="p-6 bg-card/50 backdrop-blur border-primary/20">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Layers className="h-5 w-5 text-primary" />
-              Obsah dokumentace
-            </h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
-              {[
-                { href: "#statistiky", label: "Statistiky a realita" },
-                { href: "#typy-utoku", label: "Typy útoků na hesla" },
-                { href: "#entropie", label: "Entropie a matematika hesel" },
-                { href: "#psychologie", label: "Psychologie hesel" },
-                { href: "#best-practices", label: "Doporučené postupy" },
-                { href: "#spravci-hesel", label: "Správci hesel" },
-                { href: "#mfa", label: "Vícefaktorová autentizace" },
-                { href: "#nase-nastroje", label: "Naše nástroje" },
-              ].map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className="flex items-center gap-2 p-2 rounded hover:bg-primary/5 transition-colors text-muted-foreground hover:text-foreground"
-                >
-                  <ChevronRight className="h-4 w-4 text-primary" />
-                  {item.label}
-                </a>
-              ))}
-            </div>
-          </Card>
+          {/* Slideshow zpráv */}
+          <NewsSlideshow
+            news={news}
+            loading={loading}
+            lastUpdated={lastUpdated}
+            error={error}
+            onRefresh={refresh}
+          />
 
-          {/* ===== SECTION 1: STATISTIKY A KRUTÁ REALITA ===== */}
-          {/* Šokující data o únicích hesel a jejich ekonomickém dopadu */}
-          <section id="statistiky" className="space-y-6 scroll-mt-8">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-destructive/10 flex items-center justify-center">
-                <Skull className="h-5 w-5 text-destructive" />
-              </div>
-              Krutá realita: Statistiky úniků dat
-            </h2>
-
-            <div className="prose prose-invert max-w-none">
-              <p className="text-muted-foreground text-lg leading-relaxed">
-                Každý den dochází k tisícům pokusů o prolomení hesel. Databáze HaveIBeenPwned, kterou využívá naše
-                aplikace, obsahuje přes <strong className="text-foreground">600 milionů</strong> uniklých hesel z
-                reálných bezpečnostních incidentů.
-              </p>
-            </div>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className="p-6 bg-gradient-to-br from-red-500/10 to-red-600/5 border-red-500/20">
-                <div className="text-3xl font-bold text-red-500 mb-2">81%</div>
-                <p className="text-sm text-muted-foreground">
-                  úniků dat je způsobeno slabými nebo ukradenými hesly (Verizon DBIR 2023)
-                </p>
-              </Card>
-
-              <Card className="p-6 bg-gradient-to-br from-orange-500/10 to-orange-600/5 border-orange-500/20">
-                <div className="text-3xl font-bold text-orange-500 mb-2">123456</div>
-                <p className="text-sm text-muted-foreground">
-                  je stále nejpoužívanější heslo na světě, následované "password" a "qwerty"
-                </p>
-              </Card>
-
-              <Card className="p-6 bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border-yellow-500/20">
-                <div className="text-3xl font-bold text-yellow-500 mb-2">65%</div>
-                <p className="text-sm text-muted-foreground">
-                  lidí používá stejné heslo pro více účtů (Google Security Survey)
-                </p>
-              </Card>
-
-              <Card className="p-6 bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
-                <div className="text-3xl font-bold text-purple-500 mb-2">$4.35M</div>
-                <p className="text-sm text-muted-foreground">
-                  je průměrná cena jednoho úniku dat pro organizaci (IBM Cost of Data Breach 2023)
-                </p>
-              </Card>
-            </div>
-
-            <Card className="p-6 bg-card/50 backdrop-blur border-destructive/20">
-              <h3 className="text-lg font-semibold text-destructive mb-4 flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" />
-                Největší úniky hesel v historii
-              </h3>
-              <div className="space-y-3">
-                {[
-                  {
-                    name: "Collection #1-5",
-                    year: "2019",
-                    count: "2.2 miliardy",
-                    desc: "záznamů email/heslo kombinací",
-                  },
-                  { name: "Yahoo", year: "2013-2014", count: "3 miliardy", desc: "účtů kompromitováno" },
-                  { name: "LinkedIn", year: "2012/2021", count: "700 milionů", desc: "profilů vystaveno" },
-                  { name: "Facebook", year: "2019", count: "533 milionů", desc: "uživatelských záznamů" },
-                  { name: "Adobe", year: "2013", count: "153 milionů", desc: "špatně šifrovaných hesel" },
-                ].map((breach, i) => (
-                  <div key={i} className="flex items-center gap-4 p-3 rounded-lg bg-background/50">
-                    <div className="text-xs text-muted-foreground font-mono w-16">{breach.year}</div>
-                    <div className="flex-1">
-                      <span className="font-semibold">{breach.name}</span>
-                      <span className="text-muted-foreground"> – </span>
-                      <span className="text-destructive font-bold">{breach.count}</span>
-                      <span className="text-muted-foreground"> {breach.desc}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </section>
-
-          {/* ===== SECTION 2: TYPY ÚTOKŮ NA HESLA ===== */}
-          {/* Detailní popis útočných technik: brute force, dictionary, rainbow tables, 
-              credential stuffing, phishing a keyloggery */}
-          <section id="typy-utoku" className="space-y-6 scroll-mt-8">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                <Target className="h-5 w-5 text-orange-500" />
-              </div>
-              Typy útoků na hesla
-            </h2>
-
-            <p className="text-muted-foreground text-lg leading-relaxed">
-              Útočníci používají různé techniky k prolomení hesel. Pochopení těchto metod je klíčové pro vytváření
-              odolných hesel.
-            </p>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Brute Force */}
-              <Card className="p-6 space-y-4 bg-card/50 backdrop-blur border-orange-500/20">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
-                    <Cpu className="h-5 w-5 text-orange-500" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold">Útok hrubou silou (Brute Force)</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Systematické zkoušení všech možných kombinací znaků
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-3 text-sm">
-                  <p className="text-muted-foreground">
-                    Moderní GPU (např. RTX 4090) dokáže otestovat{" "}
-                    <strong className="text-foreground">až 10 miliard</strong> hashů za sekundu při útoku na MD5. Pro
-                    SHA-256 je to přibližně 1 miliarda hashů/s.
-                  </p>
-                  <div className="p-3 rounded bg-background/50 font-mono text-xs">
-                    <div className="text-muted-foreground">Příklad času prolomení (8 znaků, malá písmena):</div>
-                    <div>
-                      26^8 = 208 miliard kombinací ÷ 10B/s = <span className="text-orange-500">~21 sekund</span>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Dictionary Attack */}
-              <Card className="p-6 space-y-4 bg-card/50 backdrop-blur border-yellow-500/20">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-yellow-500/10 flex items-center justify-center shrink-0">
-                    <BookOpen className="h-5 w-5 text-yellow-500" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold">Slovníkový útok (Dictionary Attack)</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Použití předem připravených seznamů běžných hesel
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-3 text-sm">
-                  <p className="text-muted-foreground">
-                    Útočníci používají slovníky obsahující miliony běžných hesel, slov, jmen a jejich variací.
-                    Nejznámější je <strong className="text-foreground">RockYou</strong> seznam s 14 miliony reálných
-                    hesel.
-                  </p>
-                  <div className="p-3 rounded bg-background/50">
-                    <div className="text-muted-foreground text-xs mb-2">Běžné transformace ve slovnících:</div>
-                    <div className="font-mono text-xs space-y-1">
-                      <div>heslo → h3sl0, H3SL0, heslo123, heslo!, Heslo2024</div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Rainbow Tables */}
-              <Card className="p-6 space-y-4 bg-card/50 backdrop-blur border-purple-500/20">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                    <Database className="h-5 w-5 text-purple-500" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold">Rainbow Tables</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Předpočítané tabulky hashů pro rychlé vyhledání
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-3 text-sm">
-                  <p className="text-muted-foreground">
-                    Místo výpočtu hashů v reálném čase útočník použije předpočítanou tabulku, kde vyhledá hash a získá
-                    původní heslo. Obrana: <strong className="text-foreground">salt</strong> (náhodná data přidaná k
-                    heslu před hashováním).
-                  </p>
-                  <div className="p-3 rounded bg-background/50 font-mono text-xs">
-                    <div className="text-green-500">S solí: hash(heslo + "x7Kp2") ≠ hash(heslo + "m9Qw4")</div>
-                    <div className="text-red-500">Bez soli: hash(heslo) = vždy stejný výsledek</div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Credential Stuffing */}
-              <Card className="p-6 space-y-4 bg-card/50 backdrop-blur border-red-500/20">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
-                    <Network className="h-5 w-5 text-red-500" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold">Credential Stuffing</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Použití uniklých přihlašovacích údajů na jiných službách
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-3 text-sm">
-                  <p className="text-muted-foreground">
-                    Útočníci automaticky zkoušejí uniklé kombinace email/heslo na stovkách webů. Pokud používáte stejné
-                    heslo všude, <strong className="text-destructive">jeden únik = kompromitace všech účtů</strong>.
-                  </p>
-                  <div className="p-3 rounded bg-background/50 text-xs">
-                    <div className="text-muted-foreground">Průběh útoku:</div>
-                    <div className="mt-1">Únik z webu A → Bot testuje na Gmail, Facebook, Amazon, banky...</div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Phishing */}
-              <Card className="p-6 space-y-4 bg-card/50 backdrop-blur border-cyan-500/20">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-cyan-500/10 flex items-center justify-center shrink-0">
-                    <Globe className="h-5 w-5 text-cyan-500" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold">Phishing a sociální inženýrství</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Manipulace uživatele k dobrovolnému prozrazení hesla
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-3 text-sm">
-                  <p className="text-muted-foreground">
-                    Falešné přihlašovací stránky, podvodné emaily nebo telefonáty. Ani nejsilnější heslo nepomůže, pokud
-                    ho zadáte na útočníkovu stránku.
-                  </p>
-                  <div className="p-3 rounded bg-background/50 text-xs">
-                    <div className="text-cyan-500">
-                      Obrana: Kontrolujte URL, používejte 2FA, nikdy neklikejte na odkazy v emailech
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Keylogger */}
-              <Card className="p-6 space-y-4 bg-card/50 backdrop-blur border-emerald-500/20">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
-                    <Fingerprint className="h-5 w-5 text-emerald-500" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold">Keyloggery a malware</h3>
-                    <p className="text-sm text-muted-foreground mt-1">Software zachycující stisknuté klávesy</p>
-                  </div>
-                </div>
-                <div className="space-y-3 text-sm">
-                  <p className="text-muted-foreground">
-                    Škodlivý software nainstalovaný na vašem zařízení může zachytit každé stisknutí klávesy včetně
-                    hesel.
-                  </p>
-                  <div className="p-3 rounded bg-background/50 text-xs">
-                    <div className="text-emerald-500">
-                      Obrana: Aktualizovaný OS a antivirus, nestahovat z neznámých zdrojů, hardwarové klíče (FIDO2)
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </section>
-
-          {/* ===== SECTION 3: ENTROPIE A MATEMATIKA HESEL ===== */}
-          {/* Vysvětlení konceptu entropie, vzorce, znakové sady a praktické příklady.
-              Tato sekce je klíčová pro pochopení, proč délka a složitost hesla záleží. */}
-          <section id="entropie" className="space-y-6 scroll-mt-8">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                <Calculator className="h-5 w-5 text-cyan-500" />
-              </div>
-              Entropie: Matematika síly hesla
-            </h2>
-
-            <p className="text-muted-foreground text-lg leading-relaxed">
-              Entropie měří "náhodnost" nebo "nepředvídatelnost" hesla v bitech. Čím vyšší entropie, tím více pokusů
-              útočník potřebuje k prolomení.
-            </p>
-
-            <Card className="p-6 bg-card/50 backdrop-blur border-cyan-500/20 space-y-6">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Binary className="h-5 w-5 text-cyan-500" />
-                Jak se počítá síla hesla?
-              </h3>
-              
-              {/* Jednoduché vysvětlení */}
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <p className="text-muted-foreground leading-relaxed">
-                  <strong className="text-foreground">Entropie</strong> je číslo, které říká, jak těžké je heslo uhodnout. 
-                  Čím vyšší číslo, tím bezpečnější heslo. Měří se v <strong className="text-foreground">bitech</strong>.
-                </p>
-              </div>
-
-              {/* Vzorec s vizuálním vysvětlením */}
-              <div className="space-y-4">
-                <h4 className="font-semibold">Jednoduchý vzorec:</h4>
-                
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-lg bg-background/50 text-center border border-border">
-                    <div className="text-3xl font-bold text-cyan-500 mb-2">Délka</div>
-                    <div className="text-sm text-muted-foreground">Kolik znaků má heslo</div>
-                    <div className="mt-2 font-mono text-lg">L</div>
-                  </div>
-                  
-                  <div className="p-4 rounded-lg bg-background/50 text-center border border-border flex flex-col justify-center">
-                    <div className="text-3xl font-bold text-muted-foreground">×</div>
-                  </div>
-                  
-                  <div className="p-4 rounded-lg bg-background/50 text-center border border-border">
-                    <div className="text-3xl font-bold text-emerald-500 mb-2">Složitost</div>
-                    <div className="text-sm text-muted-foreground">Kolik různých znaků lze použít</div>
-                    <div className="mt-2 font-mono text-lg">log₂(C)</div>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-center">
-                  <div className="text-sm text-muted-foreground mb-2">Výsledný vzorec:</div>
-                  <div className="text-xl font-mono">
-                    <span className="text-cyan-500 font-bold">Entropie</span> = 
-                    <span className="text-cyan-500"> Délka hesla</span> × 
-                    <span className="text-emerald-500"> Složitost znakové sady</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Znaková sada vysvětlení */}
-              <div className="space-y-3">
-                <h4 className="font-semibold">Co je "složitost znakové sady"?</h4>
-                <p className="text-sm text-muted-foreground">
-                  Závisí na tom, jaké typy znaků v hesle používáte:
-                </p>
-                
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <div className="p-3 rounded-lg bg-background/50 flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500 font-bold text-lg">26</div>
-                    <div>
-                      <div className="font-medium text-sm">Pouze malá písmena</div>
-                      <div className="text-xs text-muted-foreground">a-z (slabé)</div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-3 rounded-lg bg-background/50 flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500 font-bold text-lg">52</div>
-                    <div>
-                      <div className="font-medium text-sm">+ velká písmena</div>
-                      <div className="text-xs text-muted-foreground">a-z, A-Z (lepší)</div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-3 rounded-lg bg-background/50 flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-yellow-500/10 flex items-center justify-center text-yellow-500 font-bold text-lg">62</div>
-                    <div>
-                      <div className="font-medium text-sm">+ číslice</div>
-                      <div className="text-xs text-muted-foreground">a-z, A-Z, 0-9 (dobré)</div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-3 rounded-lg bg-background/50 flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 font-bold text-lg">95</div>
-                    <div>
-                      <div className="font-medium text-sm">+ speciální znaky</div>
-                      <div className="text-xs text-muted-foreground">Vše včetně !@#$% (nejlepší)</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Praktický příklad */}
-              <div className="p-4 rounded-lg bg-gradient-to-r from-cyan-500/10 to-emerald-500/10 border border-cyan-500/20 space-y-3">
-                <h4 className="font-semibold flex items-center gap-2">
-                  <Calculator className="h-4 w-4 text-cyan-500" />
-                  Praktický příklad
-                </h4>
-                
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">Máte heslo:</div>
-                    <div className="font-mono text-lg p-2 rounded bg-background/50 text-center">Kx9#mP2@qL5*nR7!</div>
-                    <div className="text-xs text-muted-foreground text-center">16 znaků, všechny typy</div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">Výpočet:</div>
-                    <div className="font-mono text-sm p-2 rounded bg-background/50 space-y-1">
-                      <div>Délka: <span className="text-cyan-500">16</span></div>
-                      <div>Znaková sada: <span className="text-emerald-500">95</span> (všechny typy)</div>
-                      <div>Složitost: log₂(95) ≈ <span className="text-emerald-500">6.57</span></div>
-                      <div className="border-t border-border pt-1 mt-1">
-                        Entropie: 16 × 6.57 = <span className="text-primary font-bold">~105 bitů</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="text-sm text-center text-muted-foreground mt-2">
-                  <span className="text-primary font-semibold">105 bitů</span> = extrémně silné heslo, 
-                  prolomení by trvalo miliardy let
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-6 bg-card/50 backdrop-blur border-primary/20 space-y-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary" />
-                Čas potřebný k prolomení podle entropie
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-2 px-3">Entropie</th>
-                      <th className="text-left py-2 px-3">Hodnocení</th>
-                      <th className="text-left py-2 px-3">Čas (10B hashů/s)</th>
-                      <th className="text-left py-2 px-3">Příklad</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-muted-foreground">
-                    <tr className="border-b border-border/50">
-                      <td className="py-2 px-3 text-red-500 font-mono">&lt;40 bitů</td>
-                      <td className="py-2 px-3">Kriticky slabé</td>
-                      <td className="py-2 px-3">Sekundy až minuty</td>
-                      <td className="py-2 px-3 font-mono">heslo123</td>
-                    </tr>
-                    <tr className="border-b border-border/50">
-                      <td className="py-2 px-3 text-orange-500 font-mono">40-60 bitů</td>
-                      <td className="py-2 px-3">Nedostačující</td>
-                      <td className="py-2 px-3">Hodiny až dny</td>
-                      <td className="py-2 px-3 font-mono">Heslo123!</td>
-                    </tr>
-                    <tr className="border-b border-border/50">
-                      <td className="py-2 px-3 text-yellow-500 font-mono">60-80 bitů</td>
-                      <td className="py-2 px-3">Dobré</td>
-                      <td className="py-2 px-3">Roky až staletí</td>
-                      <td className="py-2 px-3 font-mono">K9#mPq2$xL</td>
-                    </tr>
-                    <tr className="border-b border-border/50">
-                      <td className="py-2 px-3 text-emerald-500 font-mono">80-128 bitů</td>
-                      <td className="py-2 px-3">Bezpečné</td>
-                      <td className="py-2 px-3">Miliony let</td>
-                      <td className="py-2 px-3 font-mono">xK9#mPq2$xLwR4@n</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2 px-3 text-cyan-500 font-mono">&gt;128 bitů</td>
-                      <td className="py-2 px-3">Vojenská úroveň</td>
-                      <td className="py-2 px-3">Věk vesmíru+</td>
-                      <td className="py-2 px-3 font-mono">Kryptograficky neprolomitelné</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          </section>
-
-          {/* ===== SECTION 4: PSYCHOLOGIE HESEL ===== */}
-          {/* Proč lidé volí slabá hesla, kognitivní zkreslení a iluze bezpečnosti */}
-          <section id="psychologie" className="space-y-6 scroll-mt-8">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                <Brain className="h-5 w-5 text-purple-500" />
-              </div>
-              Psychologie hesel: Proč volíme špatně
-            </h2>
-
-            <p className="text-muted-foreground text-lg leading-relaxed">
-              Lidský mozek není navržen pro vytváření a pamatování náhodných řetězců. Naše přirozené tendence vedou k
-              předvídatelným vzorům, které útočníci dobře znají.
-            </p>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Card className="p-5 bg-card/50 backdrop-blur border-purple-500/20 space-y-3">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Users className="h-4 w-4 text-purple-500" />
-                  Osobní informace
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Jména, data narození, domácí mazlíčci, oblíbené týmy – vše, co útočník najde na sociálních sítích.
-                </p>
-              </Card>
-
-              <Card className="p-5 bg-card/50 backdrop-blur border-purple-500/20 space-y-3">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-purple-500" />
-                  Předvídatelné vzory
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Velké písmeno na začátku, čísla na konci, záměna "a" za "@", "e" za "3" – všechny tyto vzory jsou ve
-                  slovnících.
-                </p>
-              </Card>
-
-              <Card className="p-5 bg-card/50 backdrop-blur border-purple-500/20 space-y-3">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Hash className="h-4 w-4 text-purple-500" />
-                  Klávesnicové vzory
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  qwerty, asdfgh, 123456, zxcvbn – sekvence kláves vedle sebe jsou extrémně slabé.
-                </p>
-              </Card>
-
-              <Card className="p-5 bg-card/50 backdrop-blur border-purple-500/20 space-y-3">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-purple-500" />
-                  Sezónní hesla
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Léto2024, Zima2023, Jaro! – útočníci vědí, že lidé mění hesla podle ročních období.
-                </p>
-              </Card>
-
-              <Card className="p-5 bg-card/50 backdrop-blur border-purple-500/20 space-y-3">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <FileWarning className="h-4 w-4 text-purple-500" />
-                  Minimální úsilí
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Lidé volí nejkratší heslo splňující požadavky. "8 znaků s číslem" = "heslo123".
-                </p>
-              </Card>
-
-              <Card className="p-5 bg-card/50 backdrop-blur border-purple-500/20 space-y-3">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Eye className="h-4 w-4 text-purple-500" />
-                  Opakování hesel
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Jedno "silné" heslo pro všechno = jeden únik kompromituje všechny účty.
-                </p>
-              </Card>
-            </div>
-          </section>
-
-          {/* ===== SECTION 5: DOPORUČENÉ POSTUPY (BEST PRACTICES) ===== */}
-          {/* Co dělat a čemu se vyhnout při tvorbě a správě hesel */}
-          <section id="best-practices" className="space-y-6 scroll-mt-8">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <ShieldCheck className="h-5 w-5 text-emerald-500" />
-              </div>
-              Doporučené postupy pro silná hesla
-            </h2>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card className="p-6 space-y-4 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 border-emerald-500/20">
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <Key className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-emerald-500 flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5" />
-                      Co dělat
-                    </h3>
-                    <ul className="space-y-3 text-sm">
-                      <li className="flex gap-3">
-                        <span className="text-emerald-500 font-bold shrink-0">✓</span>
-                        <div>
-                          <strong>Minimálně 12-16 znaků</strong> – délka je nejdůležitější faktor. Každý znak
-                          exponenciálně zvyšuje bezpečnost.
-                        </div>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="text-emerald-500 font-bold shrink-0">✓</span>
-                        <div>
-                          <strong>Používejte passphrase</strong> – náhodná kombinace 4-6 slov (např.
-                          "kočka-tramvaj-modrý-klavír") je bezpečnější a zapamatovatelnější.
-                        </div>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="text-emerald-500 font-bold shrink-0">✓</span>
-                        <div>
-                          <strong>Unikátní heslo pro každý účet</strong> – používejte správce hesel pro generování a
-                          ukládání.
-                        </div>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="text-emerald-500 font-bold shrink-0">✓</span>
-                        <div>
-                          <strong>Aktivujte dvoufaktorovou autentizaci</strong> – i kdyby heslo uniklo, útočník se
-                          nedostane dovnitř.
-                        </div>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="text-emerald-500 font-bold shrink-0">✓</span>
-                        <div>
-                          <strong>Pravidelně kontrolujte úniky</strong> – použijte naši kontrolu úniku dat nebo službu
-                          HaveIBeenPwned.
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="p-6 space-y-4 bg-gradient-to-br from-red-500/5 to-orange-500/5 border-red-500/20">
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-secondary/10 flex items-center justify-center shrink-0">
-                    <Database className="h-6 w-6 text-secondary" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-red-500 flex items-center gap-2">
-                      <XCircle className="h-5 w-5" />
-                      Čemu se vyhnout
-                    </h3>
-                    <ul className="space-y-3 text-sm">
-                      <li className="flex gap-3">
-                        <span className="text-red-500 font-bold shrink-0">×</span>
-                        <div>
-                          <strong>Slovníková slova a jména</strong> – "Administrator", "Heslo", "Praha" jsou ve všech
-                          slovnících.
-                        </div>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="text-red-500 font-bold shrink-0">×</span>
-                        <div>
-                          <strong>Osobní informace</strong> – datum narození, jména členů rodiny, PSČ, telefonní čísla.
-                        </div>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="text-red-500 font-bold shrink-0">×</span>
-                        <div>
-                          <strong>Sekvence a vzory</strong> – 123456, qwerty, abcdef, aaaa1111.
-                        </div>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="text-red-500 font-bold shrink-0">×</span>
-                        <div>
-                          <strong>Jednoduché substituce</strong> – p@ssw0rd, h3sl0, @ místo a – jsou ve slovnících.
-                        </div>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="text-red-500 font-bold shrink-0">×</span>
-                        <div>
-                          <strong>Ukládání hesel v prohlížeči</strong> – bez hlavního hesla jsou čitelná. Používejte
-                          dedikovaného správce.
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </section>
-
-          {/* ===== SECTION 6: SPRÁVCI HESEL (PASSWORD MANAGERS) ===== */}
-          {/* Proč používat password manager a přehled doporučených řešení */}
-          <section id="spravci-hesel" className="space-y-6 scroll-mt-8">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <KeyRound className="h-5 w-5 text-blue-500" />
-              </div>
-              Správci hesel: Vaše první linie obrany
-            </h2>
-
-            <p className="text-muted-foreground text-lg leading-relaxed">
-              Správce hesel je aplikace, která bezpečně ukládá a generuje silná, unikátní hesla pro všechny vaše účty.
-              Potřebujete si pamatovat pouze jedno hlavní heslo.
-            </p>
-
-            <Card className="p-6 bg-card/50 backdrop-blur border-blue-500/20 space-y-4">
-              <h3 className="text-lg font-semibold">Jak správce hesel funguje</h3>
-              <div className="grid sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg bg-background/50 space-y-2">
-                  <div className="h-8 w-8 rounded bg-blue-500/10 flex items-center justify-center">
-                    <Lock className="h-4 w-4 text-blue-500" />
-                  </div>
-                  <h4 className="font-semibold text-sm">1. Šifrovaný trezor</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Všechna hesla jsou šifrována AES-256 pomocí vašeho hlavního hesla
-                  </p>
-                </div>
-                <div className="p-4 rounded-lg bg-background/50 space-y-2">
-                  <div className="h-8 w-8 rounded bg-blue-500/10 flex items-center justify-center">
-                    <Zap className="h-4 w-4 text-blue-500" />
-                  </div>
-                  <h4 className="font-semibold text-sm">2. Auto-generování</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Generuje náhodná 20-30+ znaková hesla pro každý nový účet
-                  </p>
-                </div>
-                <div className="p-4 rounded-lg bg-background/50 space-y-2">
-                  <div className="h-8 w-8 rounded bg-blue-500/10 flex items-center justify-center">
-                    <Globe className="h-4 w-4 text-blue-500" />
-                  </div>
-                  <h4 className="font-semibold text-sm">3. Synchronizace</h4>
-                  <p className="text-xs text-muted-foreground">Bezpečná synchronizace mezi všemi vašimi zařízeními</p>
-                </div>
-              </div>
-            </Card>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { name: "Bitwarden", desc: "Open-source, zdarma, auditovaný", color: "blue" },
-                { name: "1Password", desc: "Prémiové funkce, rodinné plány", color: "cyan" },
-                { name: "KeePassXC", desc: "Offline, lokální databáze", color: "emerald" },
-                { name: "Proton Pass", desc: "Od tvůrců ProtonMail, E2E šifrování", color: "purple" },
-              ].map((pm, i) => (
-                <Card key={i} className={`p-4 bg-card/50 backdrop-blur border-${pm.color}-500/20 space-y-2`}>
-                  <h4 className="font-semibold">{pm.name}</h4>
-                  <p className="text-xs text-muted-foreground">{pm.desc}</p>
-                </Card>
-              ))}
-            </div>
-          </section>
-
-          {/* ===== SECTION 7: VÍCEFAKTOROVÁ AUTENTIZACE (MFA/2FA) ===== */}
-          {/* Typy druhého faktoru a jejich bezpečnostní úrovně */}
-          <section id="mfa" className="space-y-6 scroll-mt-8">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-teal-500/10 flex items-center justify-center">
-                <Smartphone className="h-5 w-5 text-teal-500" />
-              </div>
-              Vícefaktorová autentizace (MFA/2FA)
-            </h2>
-
-            <p className="text-muted-foreground text-lg leading-relaxed">
-              MFA přidává další vrstvu ochrany. I kdyby útočník získal vaše heslo, bez druhého faktoru se nedostane do
-              účtu.
-            </p>
-
-            <Card className="p-6 bg-card/50 backdrop-blur border-teal-500/20 space-y-4">
-              <h3 className="text-lg font-semibold">Typy druhého faktoru (od nejbezpečnějšího)</h3>
-              <div className="space-y-3">
-                {[
-                  {
-                    name: "Hardwarový klíč (FIDO2/WebAuthn)",
-                    desc: "YubiKey, Google Titan – fyzický klíč odolný proti phishingu",
-                    security: "Nejvyšší",
-                    color: "emerald",
-                  },
-                  {
-                    name: "Autentizační aplikace (TOTP)",
-                    desc: "Google Authenticator, Authy – časově omezené kódy",
-                    security: "Vysoká",
-                    color: "teal",
-                  },
-                  {
-                    name: "Push notifikace",
-                    desc: "Microsoft Authenticator, Duo – potvrzení na telefonu",
-                    security: "Střední",
-                    color: "blue",
-                  },
-                  {
-                    name: "SMS kódy",
-                    desc: "Jednorázové kódy přes SMS – lepší než nic, ale zranitelné SIM swapem",
-                    security: "Nízká",
-                    color: "orange",
-                  },
-                ].map((factor, i) => (
-                  <div
-                    key={i}
-                    className={`flex items-start gap-4 p-4 rounded-lg bg-background/50 border-l-4 border-${factor.color}-500`}
-                  >
-                    <div className="flex-1">
-                      <h4 className="font-semibold">{factor.name}</h4>
-                      <p className="text-sm text-muted-foreground">{factor.desc}</p>
-                    </div>
-                    <div
-                      className={`text-xs font-bold text-${factor.color}-500 px-2 py-1 rounded bg-${factor.color}-500/10`}
-                    >
-                      {factor.security}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </section>
-
-          {/* ===== SECTION 8: NAŠE NÁSTROJE ===== */}
-          {/* Propojení s funkcemi aplikace: generátor, kontrola úniku, test síly */}
-          <section id="nase-nastroje" className="space-y-6 scroll-mt-8">
-            <h2 className="text-3xl font-bold flex items-center gap-3">
+          {/* Sekce osvěty */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Shield className="h-5 w-5 text-primary" />
+                <BookOpen className="h-5 w-5 text-primary" />
               </div>
-              Naše nástroje: Technické detaily
-            </h2>
-
-            <div className="grid gap-6">
-              <Card className="p-6 bg-card/50 backdrop-blur border-primary/20 space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <Key className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold">Generátor hesel</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Používá{" "}
-                      <code className="px-1.5 py-0.5 rounded bg-background font-mono text-xs">
-                        crypto.getRandomValues()
-                      </code>{" "}
-                      – kryptograficky bezpečný generátor náhodných čísel (CSPRNG) implementovaný v prohlížeči.
-                      Algoritmus Rejection Sampling eliminuje "Modulo Bias", což zajišťuje perfektní rovnoměrné
-                      rozložení znaků.
-                    </p>
-                  </div>
-                </div>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/generator">Vyzkoušet generátor →</Link>
-                </Button>
-              </Card>
-
-              <Card className="p-6 bg-card/50 backdrop-blur border-secondary/20 space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-secondary/10 flex items-center justify-center shrink-0">
-                    <Database className="h-6 w-6 text-secondary" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold">Kontrola úniku dat</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Implementuje <strong>k-Anonymity</strong> protokol. Vaše heslo je hashováno SHA-1 lokálně,
-                      odesíláme pouze prvních 5 znaků hashe na HaveIBeenPwned API. Ze zbývajících odpovědí (typicky
-                      stovky hashů) lokálně vyhledáme shodu. Vaše plné heslo ani hash nikdy neopustí zařízení.
-                    </p>
-                  </div>
-                </div>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/test">Analyzovat heslo →</Link>
-                </Button>
-              </Card>
-
-              <Card className="p-6 bg-card/50 backdrop-blur border-accent/20 space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-                    <Server className="h-6 w-6 text-accent" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold">Komplexní analýza hesla</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Využívá knihovnu <strong>zxcvbn-ts</strong> pro analýzu síly hesla a <strong>HIBP API</strong> pro kontrolu v databázích úniků.
-                      Detekuje slovníková slova, klávesnicové vzory, opakování, leet speak transformace a další slabiny.
-                      Výpočet entropie je založen na skutečném počtu pokusů (guesses), nikoliv teoretické složitosti.
-                    </p>
-                  </div>
-                </div>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/test">Otestovat heslo →</Link>
-                </Button>
-              </Card>
+              <div>
+                <h2 className="text-2xl font-bold">Vzdělávání o bezpečnosti hesel</h2>
+                <p className="text-muted-foreground text-sm">Klikněte na téma pro rozbalení</p>
+              </div>
             </div>
-          </section>
+            <OsvetaAccordion sections={OSVETA_SECTIONS} />
+          </div>
 
-          {/* Final CTA */}
-          <Card className="p-8 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10 border-primary/20 text-center space-y-4">
-            <h2 className="text-2xl font-bold">Začněte chránit svá hesla ještě dnes</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Bezpečnost začíná u silných hesel. Využijte naše nástroje k vytvoření, otestování a ověření vašich hesel –
-              vše probíhá lokálně ve vašem prohlížeči.
+          {/* CTA */}
+          <div className="text-center p-8 rounded-xl border border-primary/20 bg-card/50 space-y-4">
+            <h2 className="text-2xl font-bold">Aplikujte znalosti v praxi</h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              Otestujte svá hesla nebo si nechte vygenerovat nová — vše probíhá lokálně, žádná data neopustí váš prohlížeč.
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
-              <Button asChild size="lg">
-                <Link href="/generator">
-                  <Key className="mr-2 h-5 w-5" />
-                  Vygenerovat heslo
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="bg-transparent">
-                <Link href="/test">
-                  <TestTube className="mr-2 h-5 w-5" />
-                  Otestovat sílu
-                </Link>
-              </Button>
+            <div className="flex flex-wrap justify-center gap-4 pt-2">
+              <Link href="/generator" className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
+                <Key className="h-5 w-5" />
+                Generátor hesel
+              </Link>
+              <Link href="/test" className="inline-flex items-center gap-2 px-6 py-3 rounded-lg border border-border bg-transparent hover:bg-accent transition-colors font-medium">
+                <Shield className="h-5 w-5" />
+                Analyzátor síly hesla
+              </Link>
             </div>
-          </Card>
+          </div>
+
         </div>
       </main>
     </div>
