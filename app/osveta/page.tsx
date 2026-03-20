@@ -5,9 +5,8 @@ import { Navigation } from "@/components/navigation"
 import Link from "next/link"
 import {
   Shield, Key, ExternalLink, RefreshCw, ChevronLeft, ChevronRight,
-  Wifi, Lock, Eye, AlertTriangle, Database, Cpu, Globe, Smartphone,
-  BookOpen, TrendingUp, Users, Brain, Clock, CheckCircle, XCircle,
-  Zap, Server, Hash, Calculator, Layers, ChevronDown, Radio,
+  AlertTriangle, Database, Smartphone, BookOpen, TrendingUp,
+  CheckCircle, XCircle, Calculator, ChevronDown, Radio,
 } from "lucide-react"
 
 // =============================================================================
@@ -20,6 +19,7 @@ interface NewsItem {
   pubDate: string
   source: string
   category: string
+  isForeign?: boolean
 }
 
 interface RssSource {
@@ -27,11 +27,14 @@ interface RssSource {
   url: string
   proxyUrl: string
   category: string
+  isForeign?: boolean
+  count?: number
 }
 
 // =============================================================================
-// RSS ZDROJE — proxy přes allorigins.win (CORS bypass)
-// Každý zdroj je spolehlivý kyberbezpečnostní RSS feed
+// RSS ZDROJE
+// Primárně české zdroje, na konci max. 2 zahraniční
+// Paralelní načítání přes rss2json.com (rychlé, má vlastní cache)
 // =============================================================================
 
 const RSS_SOURCES: RssSource[] = [
@@ -41,138 +44,169 @@ const RSS_SOURCES: RssSource[] = [
     url: "https://www.nukib.cz/cs/rss/",
     proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.nukib.cz/cs/rss/") + "&count=4",
     category: "Varování",
+    isForeign: false,
+    count: 4,
   },
   {
     name: "Národní CERT",
     url: "https://www.csirt.cz/rss/news/",
     proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.csirt.cz/rss/news/") + "&count=4",
     category: "CERT",
-  },
-  {
-    name: "Lupa.cz — Bezpečnost",
-    url: "https://www.lupa.cz/rss/clanky/",
-    proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.lupa.cz/rss/clanky/") + "&count=4",
-    category: "Zprávy",
+    isForeign: false,
+    count: 4,
   },
   {
     name: "Root.cz — Bezpečnost",
     url: "https://www.root.cz/rss/clanky/bezpecnost/",
     proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.root.cz/rss/clanky/bezpecnost/") + "&count=4",
     category: "Bezpečnost",
+    isForeign: false,
+    count: 4,
+  },
+  {
+    name: "Lupa.cz",
+    url: "https://www.lupa.cz/rss/clanky/",
+    proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.lupa.cz/rss/clanky/") + "&count=4",
+    category: "Zprávy",
+    isForeign: false,
+    count: 4,
   },
   {
     name: "SecurityWorld.cz",
     url: "https://www.securityworld.cz/rss/",
     proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.securityworld.cz/rss/") + "&count=4",
     category: "Bezpečnost",
+    isForeign: false,
+    count: 4,
   },
   {
     name: "Živě.cz — Bezpečnost",
     url: "https://www.zive.cz/rss/sc-47/",
     proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.zive.cz/rss/sc-47/") + "&count=4",
     category: "Zprávy",
+    isForeign: false,
+    count: 4,
   },
-  // ===== ZAHRANIČNÍ ZDROJE =====
+  // ===== ZAHRANIČNÍ ZDROJE (max 2) =====
   {
     name: "Bleeping Computer",
     url: "https://www.bleepingcomputer.com/feed/",
     proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.bleepingcomputer.com/feed/") + "&count=3",
     category: "Mezinárodní",
+    isForeign: true,
+    count: 3,
   },
   {
     name: "The Hacker News",
     url: "https://feeds.feedburner.com/TheHackersNews",
     proxyUrl: "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://feeds.feedburner.com/TheHackersNews") + "&count=3",
     category: "Mezinárodní",
+    isForeign: true,
+    count: 3,
   },
 ]
 
-// Fallback zprávy pokud RSS selže
+// =============================================================================
+// FALLBACK ZPRÁVY — zobrazí se okamžitě než doběhne RSS
+// =============================================================================
+
 const FALLBACK_NEWS: NewsItem[] = [
-  { title: "Kritická zranitelnost v OpenSSL opravena — aktualizujte okamžitě", link: "#", pubDate: new Date().toISOString(), source: "Security Advisory", category: "Zranitelnosti" },
-  { title: "Nová vlna phishingových útoků cílí na české bankovní klienty", link: "#", pubDate: new Date().toISOString(), source: "NÚKIB", category: "Phishing" },
-  { title: "Ransomware skupina LockBit znovu aktivní pod novým názvem", link: "#", pubDate: new Date().toISOString(), source: "Threat Intel", category: "Ransomware" },
-  { title: "Google zavádí passkeys jako výchozí přihlašovací metodu", link: "#", pubDate: new Date().toISOString(), source: "Google Security", category: "Autentizace" },
-  { title: "Databáze 10 miliard hesel unikla na dark web — zkontrolujte svá hesla", link: "#", pubDate: new Date().toISOString(), source: "HIBP", category: "Úniky dat" },
-  { title: "AI nástroje využívány k automatizaci spear-phishing útoků", link: "#", pubDate: new Date().toISOString(), source: "Krebs on Security", category: "AI & Bezpečnost" },
-  { title: "Nová CVE zranitelnost v Apache Log4j — patch vydán", link: "#", pubDate: new Date().toISOString(), source: "CVE Database", category: "Zranitelnosti" },
-  { title: "Europol zlikvidoval infrastrukturu botnet sítě s 500 000 zařízeními", link: "#", pubDate: new Date().toISOString(), source: "Europol", category: "Operace" },
+  { title: "NÚKIB varuje před novou vlnou phishingových útoků na české instituce", link: "#", pubDate: new Date().toISOString(), source: "NÚKIB", category: "Varování", isForeign: false },
+  { title: "Národní CERT vydal upozornění na kritickou zranitelnost v routerech", link: "#", pubDate: new Date().toISOString(), source: "Národní CERT", category: "CERT", isForeign: false },
+  { title: "Root.cz: Jak fungují passkeys a proč nahrazují hesla", link: "#", pubDate: new Date().toISOString(), source: "Root.cz", category: "Bezpečnost", isForeign: false },
+  { title: "SecurityWorld: Ransomware útoky na české firmy vzrostly o 40 %", link: "#", pubDate: new Date().toISOString(), source: "SecurityWorld.cz", category: "Bezpečnost", isForeign: false },
+  { title: "Živě.cz: Google zavádí passkeys jako výchozí přihlašování", link: "#", pubDate: new Date().toISOString(), source: "Živě.cz", category: "Zprávy", isForeign: false },
+  { title: "Lupa.cz: Databáze 10 miliard hesel unikla na dark web", link: "#", pubDate: new Date().toISOString(), source: "Lupa.cz", category: "Úniky dat", isForeign: false },
+  { title: "Critical OpenSSL vulnerability patched — update immediately", link: "#", pubDate: new Date().toISOString(), source: "Bleeping Computer", category: "Mezinárodní", isForeign: true },
+  { title: "LockBit ransomware group resurfaces under new identity", link: "#", pubDate: new Date().toISOString(), source: "The Hacker News", category: "Mezinárodní", isForeign: true },
 ]
 
 // =============================================================================
 // HOOK: Načítání RSS feedů
+// — okamžitý fallback, paralelní fetch, timeout 5s
 // =============================================================================
 
 function useRssNews() {
-  const [news, setNews] = useState<NewsItem[]>([])
+  // Fallback zobrazíme okamžitě, RSS přepíše jakmile doběhne
+  const [news, setNews] = useState<NewsItem[]>(FALLBACK_NEWS)
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [error, setError] = useState(false)
 
-  const parseRss = useCallback((xmlText: string, sourceName: string, category: string): NewsItem[] => {
-    try {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(xmlText, "text/xml")
-      const items = Array.from(doc.querySelectorAll("item")).slice(0, 4)
-      return items.map((item) => ({
-        title: item.querySelector("title")?.textContent?.trim() || "Bez názvu",
-        link: item.querySelector("link")?.textContent?.trim() || "#",
-        pubDate: item.querySelector("pubDate")?.textContent?.trim() || new Date().toISOString(),
-        source: sourceName,
-        category,
-      }))
-    } catch {
-      return []
-    }
-  }, [])
+  const parseRss2Json = useCallback(
+    (data: any, sourceName: string, category: string, isForeign: boolean): NewsItem[] => {
+      try {
+        if (data.status !== "ok" || !Array.isArray(data.items)) return []
+        return data.items.map((item: any) => ({
+          title: item.title?.trim() || "Bez názvu",
+          link: item.link?.trim() || "#",
+          pubDate: item.pubDate || new Date().toISOString(),
+          source: sourceName,
+          category,
+          isForeign,
+        }))
+      } catch {
+        return []
+      }
+    },
+    [],
+  )
 
   const fetchNews = useCallback(async () => {
     setLoading(true)
     setError(false)
 
-    const results: NewsItem[] = []
-    let anySuccess = false
-
-    for (const source of RSS_SOURCES) {
+    // Všechny zdroje PARALELNĚ — celková doba = nejpomalejší zdroj (max 5s)
+    const fetches = RSS_SOURCES.map(async (source) => {
       try {
         const response = await fetch(source.proxyUrl, {
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(5000),
         })
-        if (!response.ok) continue
+        if (!response.ok) return []
         const data = await response.json()
-        if (!data.contents) continue
-        const items = parseRss(data.contents, source.name, source.category)
-        if (items.length > 0) {
-          results.push(...items)
-          anySuccess = true
-        }
+        return parseRss2Json(data, source.name, source.category, source.isForeign ?? false)
       } catch {
-        // Pokračovat na další zdroj
+        return [] as NewsItem[]
       }
-    }
+    })
 
-    if (anySuccess && results.length > 0) {
-      // Seřadit podle data (nejnovější první)
-      results.sort((a, b) => {
-        try {
-          return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()
-        } catch {
-          return 0
-        }
+    const settled = await Promise.allSettled(fetches)
+    const czechItems: NewsItem[] = []
+    const foreignItems: NewsItem[] = []
+
+    settled.forEach((result) => {
+      if (result.status !== "fulfilled" || result.value.length === 0) return
+      result.value.forEach((item) => {
+        if (item.isForeign) foreignItems.push(item)
+        else czechItems.push(item)
       })
-      setNews(results.slice(0, 16))
+    })
+
+    // Seřadit každou skupinu podle data
+    const sortByDate = (a: NewsItem, b: NewsItem) => {
+      try { return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime() }
+      catch { return 0 }
+    }
+    czechItems.sort(sortByDate)
+    foreignItems.sort(sortByDate)
+
+    // České zprávy napřed, zahraniční na konci
+    const allItems = [...czechItems, ...foreignItems]
+
+    if (allItems.length > 0) {
+      setNews(allItems.slice(0, 20))
+      setError(false)
     } else {
-      setNews(FALLBACK_NEWS)
       setError(true)
+      // Fallback zůstane
     }
 
     setLastUpdated(new Date())
     setLoading(false)
-  }, [parseRss])
+  }, [parseRss2Json])
 
   useEffect(() => {
     fetchNews()
-    // Refresh každých 30 minut
     const interval = setInterval(fetchNews, 30 * 60 * 1000)
     return () => clearInterval(interval)
   }, [fetchNews])
@@ -181,23 +215,18 @@ function useRssNews() {
 }
 
 // =============================================================================
-// KOMPONENTA: News Ticker (scrollující linka nahoře)
+// KOMPONENTA: News Ticker
 // =============================================================================
 
 function NewsTicker({ news }: { news: NewsItem[] }) {
-  const tickerRef = useRef<HTMLDivElement>(null)
-
-  if (news.length === 0) return null
-
-  const items = [...news, ...news] // Duplikace pro plynulý loop
-
+  const items = [...news, ...news]
   return (
     <div className="news-ticker-wrap">
       <div className="news-ticker-label">
         <Radio className="h-3 w-3" />
         <span>LIVE</span>
       </div>
-      <div className="news-ticker-track" ref={tickerRef}>
+      <div className="news-ticker-track">
         <div className="news-ticker-inner">
           {items.map((item, i) => (
             <a
@@ -207,7 +236,9 @@ function NewsTicker({ news }: { news: NewsItem[] }) {
               rel="noopener noreferrer"
               className="news-ticker-item"
             >
-              <span className="news-ticker-cat">{item.category}</span>
+              <span className={`news-ticker-cat ${item.isForeign ? "news-ticker-cat--foreign" : ""}`}>
+                {item.isForeign ? "🌍 " : ""}{item.category}
+              </span>
               <span className="news-ticker-title">{item.title}</span>
               <span className="news-ticker-sep">◆</span>
             </a>
@@ -233,7 +264,7 @@ function NewsSlideshow({ news, loading, lastUpdated, error, onRefresh }: {
   const [isPlaying, setIsPlaying] = useState(true)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const items = news.length > 0 ? news.slice(0, 8) : FALLBACK_NEWS.slice(0, 8)
+  const items = news.slice(0, 8)
 
   const next = useCallback(() => setCurrent(c => (c + 1) % items.length), [items.length])
   const prev = useCallback(() => setCurrent(c => (c - 1 + items.length) % items.length), [items.length])
@@ -244,13 +275,17 @@ function NewsSlideshow({ news, loading, lastUpdated, error, onRefresh }: {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [isPlaying, next])
 
+  // Reset current při změně news (po načtení RSS)
+  useEffect(() => { setCurrent(0) }, [news])
+
   const formatDate = (dateStr: string) => {
     try {
       return new Date(dateStr).toLocaleDateString("cs-CZ", { day: "numeric", month: "short", year: "numeric" })
     } catch { return "" }
   }
 
-  const item = items[current]
+  const item = items[current] || items[0]
+  if (!item) return null
 
   return (
     <div className="slideshow">
@@ -260,92 +295,77 @@ function NewsSlideshow({ news, loading, lastUpdated, error, onRefresh }: {
           <div className="slideshow-live-dot" />
           <span className="slideshow-section-label">Aktuální zprávy z kyberbezpečnosti</span>
           {error && <span className="slideshow-offline-badge">offline — záloha</span>}
+          {loading && <span className="slideshow-loading-badge">načítám...</span>}
         </div>
         <div className="slideshow-controls-row">
           {lastUpdated && (
             <span className="slideshow-updated">
-              Aktualizováno: {lastUpdated.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}
+              {lastUpdated.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="slideshow-refresh-btn"
-            title="Načíst nové zprávy"
-          >
+          <button onClick={onRefresh} disabled={loading} className="slideshow-refresh-btn" title="Načíst nové zprávy">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
 
       {/* Hlavní karta */}
-      <div className="slide-card" onClick={() => item.link !== "#" && window.open(item.link, "_blank")}>
-        {loading ? (
-          <div className="slide-loading">
-            <div className="slide-loading-spinner" />
-            <span>Načítám nejnovější zprávy...</span>
+      <div
+        className="slide-card"
+        onClick={() => item.link !== "#" && window.open(item.link, "_blank")}
+        style={{ cursor: item.link !== "#" ? "pointer" : "default" }}
+      >
+        <div className="slide-meta">
+          <span className={`slide-cat ${item.isForeign ? "slide-cat--foreign" : ""}`}>
+            {item.isForeign ? "🌍 " : ""}{item.category}
+          </span>
+          <span className="slide-source">{item.source}</span>
+          <span className="slide-date">{formatDate(item.pubDate)}</span>
+        </div>
+        <h2 className="slide-title">{item.title}</h2>
+        {item.link !== "#" && (
+          <div className="slide-link">
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span>Číst celý článek</span>
           </div>
-        ) : (
-          <>
-            <div className="slide-meta">
-              <span className="slide-cat">{item.category}</span>
-              <span className="slide-source">{item.source}</span>
-              <span className="slide-date">{formatDate(item.pubDate)}</span>
-            </div>
-            <h2 className="slide-title">{item.title}</h2>
-            {item.link !== "#" && (
-              <div className="slide-link">
-                <ExternalLink className="h-3.5 w-3.5" />
-                <span>Číst celý článek</span>
-              </div>
-            )}
-            <div className="slide-progress">
-              <div
-                className="slide-progress-fill"
-                style={{ animationDuration: isPlaying ? "5s" : "0s", animationPlayState: isPlaying ? "running" : "paused" }}
-              />
-            </div>
-          </>
         )}
+        <div className="slide-progress">
+          <div
+            key={`${current}-${isPlaying}`}
+            className="slide-progress-fill"
+            style={{ animationDuration: isPlaying ? "5s" : "0s", animationPlayState: isPlaying ? "running" : "paused" }}
+          />
+        </div>
       </div>
 
       {/* Navigace */}
       <div className="slideshow-nav">
-        <button onClick={prev} className="slide-nav-btn">
-          <ChevronLeft className="h-4 w-4" />
-        </button>
+        <button onClick={prev} className="slide-nav-btn"><ChevronLeft className="h-4 w-4" /></button>
         <div className="slide-dots">
           {items.map((_, i) => (
-            <button
-              key={i}
-              className={`slide-dot ${i === current ? "slide-dot--active" : ""}`}
-              onClick={() => setCurrent(i)}
-            />
+            <button key={i} className={`slide-dot ${i === current ? "slide-dot--active" : ""}`} onClick={() => setCurrent(i)} />
           ))}
         </div>
-        <button onClick={next} className="slide-nav-btn">
-          <ChevronRight className="h-4 w-4" />
-        </button>
-        <button
-          onClick={() => setIsPlaying(v => !v)}
-          className={`slide-play-btn ${isPlaying ? "slide-play-btn--active" : ""}`}
-        >
+        <button onClick={next} className="slide-nav-btn"><ChevronRight className="h-4 w-4" /></button>
+        <button onClick={() => setIsPlaying(v => !v)} className={`slide-play-btn ${isPlaying ? "slide-play-btn--active" : ""}`}>
           {isPlaying ? "⏸" : "▶"}
         </button>
       </div>
 
       {/* Grid dalších zpráv */}
       <div className="news-grid">
-        {items.slice(0, 6).map((n, i) => (
+        {items.map((n, i) => (
           <a
             key={i}
             href={n.link !== "#" ? n.link : undefined}
             target="_blank"
             rel="noopener noreferrer"
             className={`news-card ${i === current ? "news-card--active" : ""}`}
-            onClick={() => setCurrent(i)}
+            onClick={(e) => { e.preventDefault(); setCurrent(i) }}
           >
-            <span className="news-card-cat">{n.category}</span>
+            <span className={`news-card-cat ${n.isForeign ? "news-card-cat--foreign" : ""}`}>
+              {n.isForeign ? "🌍 " : ""}{n.category}
+            </span>
             <span className="news-card-title">{n.title}</span>
             <span className="news-card-source">{n.source} · {formatDate(n.pubDate)}</span>
           </a>
@@ -356,7 +376,7 @@ function NewsSlideshow({ news, loading, lastUpdated, error, onRefresh }: {
 }
 
 // =============================================================================
-// KOMPONENTA: Sekce osvěty — accordion styl
+// KOMPONENTA: Accordion pro osvětu
 // =============================================================================
 
 interface OsvetaSection {
@@ -369,19 +389,13 @@ interface OsvetaSection {
 
 function OsvetaAccordion({ sections }: { sections: OsvetaSection[] }) {
   const [open, setOpen] = useState<string | null>(null)
-
   return (
     <div className="osveta-accordion">
       {sections.map((s) => (
         <div key={s.id} className={`osveta-item ${open === s.id ? "osveta-item--open" : ""}`}>
-          <button
-            className="osveta-trigger"
-            onClick={() => setOpen(open === s.id ? null : s.id)}
-          >
+          <button className="osveta-trigger" onClick={() => setOpen(open === s.id ? null : s.id)}>
             <div className="osveta-trigger-left">
-              <div className="osveta-icon" style={{ background: s.color + "22", color: s.color }}>
-                {s.icon}
-              </div>
+              <div className="osveta-icon" style={{ background: s.color + "22", color: s.color }}>{s.icon}</div>
               <span className="osveta-title">{s.title}</span>
             </div>
             <ChevronDown className={`osveta-chevron ${open === s.id ? "osveta-chevron--open" : ""}`} />
@@ -411,9 +425,9 @@ const OSVETA_SECTIONS: OsvetaSection[] = [
           <h4 className="osveta-h4">Tři pilíře silného hesla</h4>
           <div className="osveta-pillars">
             {[
-              { label: "Délka", value: "12+ znaků", desc: "Každý znak exponenciálně zvyšuje počet kombinací", icon: "📏", good: true },
-              { label: "Náhodnost", value: "Bez vzorů", desc: "Žádná jména, data, slova ze slovníku", icon: "🎲", good: true },
-              { label: "Unikátnost", value: "1 heslo = 1 účet", desc: "Jeden únik nesmí kompromitovat vše ostatní", icon: "🔑", good: true },
+              { label: "Délka", value: "12+ znaků", desc: "Každý znak exponenciálně zvyšuje počet kombinací", icon: "📏" },
+              { label: "Náhodnost", value: "Bez vzorů", desc: "Žádná jména, data, slova ze slovníku", icon: "🎲" },
+              { label: "Unikátnost", value: "1 heslo = 1 účet", desc: "Jeden únik nesmí kompromitovat vše ostatní", icon: "🔑" },
             ].map((p) => (
               <div key={p.label} className="osveta-pillar">
                 <span className="osveta-pillar-icon">{p.icon}</span>
@@ -433,7 +447,7 @@ const OSVETA_SECTIONS: OsvetaSection[] = [
               { pwd: "Heslo123!", strength: 20, label: "Velmi slabé", color: "#f97316" },
               { pwd: "M0jePsíč3kR3x!", strength: 55, label: "Průměrné", color: "#eab308" },
               { pwd: "xK9#mPq2$xLwR4@n", strength: 92, label: "Silné", color: "#10b981" },
-              { pwd: "kočka-tramvaj-modrý-klavír-7", strength: 98, label: "Vynikající passphrase", color: "#06b6d4" },
+              { pwd: "kočka-tramvaj-modrý-klavír-7", strength: 98, label: "Výborná passphrase", color: "#06b6d4" },
             ].map((e) => (
               <div key={e.pwd} className="osveta-example">
                 <code className="osveta-example-pwd">{e.pwd}</code>
@@ -501,9 +515,7 @@ const OSVETA_SECTIONS: OsvetaSection[] = [
               </div>
             ))}
           </div>
-          <div className="osveta-note">
-            ⚡ GPU (RTX 4090) zvládne ~10 miliard MD5 hashů za sekundu
-          </div>
+          <div className="osveta-note">⚡ GPU (RTX 4090) zvládne ~10 miliard MD5 hashů za sekundu</div>
         </div>
       </div>
     ),
@@ -516,36 +528,12 @@ const OSVETA_SECTIONS: OsvetaSection[] = [
     content: (
       <div className="osveta-attacks">
         {[
-          {
-            name: "Brute Force", icon: "⚡", color: "#ef4444",
-            desc: "Systematické zkoušení každé kombinace. Moderní GPU: 10 miliard pokusů/s.",
-            obrana: "Heslo 12+ znaků → miliardy let prolomení",
-          },
-          {
-            name: "Slovníkový útok", icon: "📖", color: "#f97316",
-            desc: "Zkouší miliony reálných hesel z uniklých databází (RockYou: 14M hesel) + variace.",
-            obrana: "Žádná slovní hesla, žádné vzory jako Heslo123!",
-          },
-          {
-            name: "Phishing", icon: "🎣", color: "#eab308",
-            desc: "Falešná přihlašovací stránka — zadáte heslo sami. Nejsilnější heslo nepomůže.",
-            obrana: "Vždy zkontrolujte URL. Hardwarový klíč (FIDO2).",
-          },
-          {
-            name: "Credential Stuffing", icon: "📋", color: "#8b5cf6",
-            desc: "Uniklé heslo z webu A zkouší bot automaticky na webech B, C, D…",
-            obrana: "Každý účet musí mít unikátní heslo. Správce hesel.",
-          },
-          {
-            name: "Rainbow Tables", icon: "🌈", color: "#06b6d4",
-            desc: "Předpočítané tabulky hashů — prolomení trvá milisekundy, ne hodiny.",
-            obrana: "Weby musí používat salt + moderní hashování (bcrypt, Argon2).",
-          },
-          {
-            name: "Keylogger", icon: "🖱️", color: "#10b981",
-            desc: "Malware zachytává každé stisknutí klávesy. Běží neviditelně na pozadí.",
-            obrana: "Aktuální antivirus. FIDO2 klíč zachrání účet i při keyloggeru.",
-          },
+          { name: "Brute Force", icon: "⚡", color: "#ef4444", desc: "Systematické zkoušení každé kombinace. Moderní GPU: 10 miliard pokusů/s.", obrana: "Heslo 12+ znaků → miliardy let prolomení" },
+          { name: "Slovníkový útok", icon: "📖", color: "#f97316", desc: "Zkouší miliony reálných hesel z uniklých databází (RockYou: 14M hesel) + variace.", obrana: "Žádná slovní hesla, žádné vzory jako Heslo123!" },
+          { name: "Phishing", icon: "🎣", color: "#eab308", desc: "Falešná přihlašovací stránka — zadáte heslo sami. Nejsilnější heslo nepomůže.", obrana: "Vždy zkontrolujte URL. Hardwarový klíč (FIDO2)." },
+          { name: "Credential Stuffing", icon: "📋", color: "#8b5cf6", desc: "Uniklé heslo z webu A zkouší bot automaticky na webech B, C, D…", obrana: "Každý účet musí mít unikátní heslo. Správce hesel." },
+          { name: "Rainbow Tables", icon: "🌈", color: "#06b6d4", desc: "Předpočítané tabulky hashů — prolomení trvá milisekundy, ne hodiny.", obrana: "Weby musí používat salt + moderní hashování (bcrypt, Argon2)." },
+          { name: "Keylogger", icon: "🖱️", color: "#10b981", desc: "Malware zachytává každé stisknutí klávesy. Běží neviditelně na pozadí.", obrana: "Aktuální antivirus. FIDO2 klíč zachrání účet i při keyloggeru." },
         ].map((a) => (
           <div key={a.name} className="osveta-attack-card" style={{ borderColor: a.color + "44" }}>
             <div className="osveta-attack-header">
@@ -592,7 +580,7 @@ const OSVETA_SECTIONS: OsvetaSection[] = [
             "Slovníková slova, jména, místa v heslech",
             "Osobní informace (datum narození, jméno mazlíčka)",
             "Sekvence: 123456, qwerty, abcdef",
-            "Substituces: @ místo a, 3 místo e — jsou ve slovnících",
+            "Substituce: @ místo a, 3 místo e — jsou ve slovnících",
             "Stejné heslo na více místech",
             "Ukládání hesel v prohlížeči bez masterkey",
             "Posílání hesel přes SMS, e-mail, chat",
@@ -713,99 +701,70 @@ const OSVETA_SECTIONS: OsvetaSection[] = [
 const PAGE_STYLES = `
   /* ===== NEWS TICKER ===== */
   .news-ticker-wrap {
-    display: flex;
-    align-items: center;
-    gap: 0;
+    display: flex; align-items: center;
     background: oklch(0.12 0.02 160);
     border-bottom: 1px solid oklch(0.55 0.12 160 / 0.3);
-    height: 36px;
-    overflow: hidden;
-    position: sticky;
-    top: 64px;
-    z-index: 40;
+    height: 36px; overflow: hidden;
+    position: sticky; top: 64px; z-index: 40;
   }
   .news-ticker-label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 0 12px;
-    background: oklch(0.55 0.12 160);
-    color: white;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    height: 100%;
-    flex-shrink: 0;
+    display: flex; align-items: center; gap: 4px;
+    padding: 0 12px; background: oklch(0.55 0.12 160);
+    color: white; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.1em; height: 100%; flex-shrink: 0;
   }
   .news-ticker-track { flex: 1; overflow: hidden; height: 100%; }
   .news-ticker-inner {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    height: 100%;
-    animation: ticker-scroll 60s linear infinite;
-    white-space: nowrap;
-    width: max-content;
+    display: flex; align-items: center; height: 100%;
+    animation: ticker-scroll 80s linear infinite;
+    white-space: nowrap; width: max-content;
   }
-  @keyframes ticker-scroll {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
-  }
+  @keyframes ticker-scroll { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
   .news-ticker-inner:hover { animation-play-state: paused; }
   .news-ticker-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 20px 0 0;
-    font-size: 12px;
-    color: oklch(0.85 0.01 180);
-    text-decoration: none;
-    cursor: pointer;
-    transition: color 0.2s;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 0 20px 0 0; font-size: 12px;
+    color: oklch(0.85 0.01 180); text-decoration: none;
+    cursor: pointer; transition: color 0.2s;
   }
   .news-ticker-item:hover { color: oklch(0.55 0.12 160); }
   .news-ticker-cat {
-    font-size: 10px;
-    font-weight: 700;
-    color: oklch(0.55 0.12 160);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-size: 10px; font-weight: 700; color: oklch(0.55 0.12 160);
+    text-transform: uppercase; letter-spacing: 0.05em;
     background: oklch(0.55 0.12 160 / 0.15);
-    padding: 1px 6px;
-    border-radius: 4px;
+    padding: 1px 6px; border-radius: 4px; flex-shrink: 0;
   }
-  .news-ticker-title { max-width: 400px; overflow: hidden; text-overflow: ellipsis; }
+  .news-ticker-cat--foreign {
+    color: oklch(0.65 0.1 270);
+    background: oklch(0.5 0.1 270 / 0.15);
+  }
+  .news-ticker-title { max-width: 380px; overflow: hidden; text-overflow: ellipsis; }
   .news-ticker-sep { color: oklch(0.35 0.04 180); }
 
   /* ===== SLIDESHOW ===== */
   .slideshow {
-    background: var(--card);
-    border: 0.5px solid var(--border);
-    border-radius: 16px;
-    overflow: hidden;
-    padding: 20px;
+    background: var(--card); border: 0.5px solid var(--border);
+    border-radius: 16px; overflow: hidden; padding: 20px;
   }
   .slideshow-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 16px;
   }
-  .slideshow-title-row { display: flex; align-items: center; gap: 8px; }
+  .slideshow-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .slideshow-live-dot {
     width: 8px; height: 8px; border-radius: 50%;
     background: oklch(0.55 0.12 160);
     animation: pulse-live 2s ease-in-out infinite;
   }
-  @keyframes pulse-live {
-    0%,100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.8); }
-  }
+  @keyframes pulse-live { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
   .slideshow-section-label { font-size: 13px; font-weight: 500; color: var(--muted-foreground); }
   .slideshow-offline-badge {
     font-size: 10px; padding: 2px 6px; border-radius: 4px;
-    background: oklch(0.5 0.18 30 / 0.15);
-    color: oklch(0.5 0.18 30);
+    background: oklch(0.5 0.18 30 / 0.15); color: oklch(0.5 0.18 30);
+  }
+  .slideshow-loading-badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    background: oklch(0.55 0.12 160 / 0.15); color: oklch(0.55 0.12 160);
   }
   .slideshow-controls-row { display: flex; align-items: center; gap: 8px; }
   .slideshow-updated { font-size: 11px; color: var(--muted-foreground); }
@@ -820,56 +779,38 @@ const PAGE_STYLES = `
   .slideshow-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .slide-card {
-    background: oklch(0.12 0.02 200);
-    border: 0.5px solid var(--border);
-    border-radius: 12px;
-    padding: 20px 24px;
-    min-height: 140px;
-    cursor: pointer;
-    transition: border-color 0.2s;
-    position: relative;
-    overflow: hidden;
-    margin-bottom: 12px;
+    background: oklch(0.12 0.02 200); border: 0.5px solid var(--border);
+    border-radius: 12px; padding: 20px 24px; min-height: 130px;
+    transition: border-color 0.2s; position: relative;
+    overflow: hidden; margin-bottom: 12px;
   }
   .slide-card:hover { border-color: oklch(0.55 0.12 160 / 0.5); }
-  .slide-loading { display: flex; align-items: center; gap: 12px; color: var(--muted-foreground); font-size: 14px; padding: 20px 0; }
-  .slide-loading-spinner {
-    width: 20px; height: 20px; border-radius: 50%;
-    border: 2px solid var(--border);
-    border-top-color: oklch(0.55 0.12 160);
-    animation: spin 1s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
   .slide-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   .slide-cat {
     font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
     background: oklch(0.55 0.12 160 / 0.2); color: oklch(0.65 0.12 160);
     padding: 2px 8px; border-radius: 4px;
   }
+  .slide-cat--foreign {
+    background: oklch(0.5 0.1 270 / 0.15); color: oklch(0.65 0.1 270);
+  }
   .slide-source { font-size: 12px; color: var(--muted-foreground); }
   .slide-date { font-size: 11px; color: var(--muted-foreground); margin-left: auto; }
   .slide-title { font-size: 18px; font-weight: 600; line-height: 1.4; margin-bottom: 12px; }
   .slide-link { display: flex; align-items: center; gap: 4px; font-size: 12px; color: oklch(0.55 0.12 160); }
-  .slide-progress {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    height: 2px; background: var(--border);
-  }
+  .slide-progress { position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--border); }
   .slide-progress-fill {
     height: 100%; background: oklch(0.55 0.12 160);
-    animation: progress-fill linear forwards;
-    transform-origin: left;
+    animation: progress-fill linear forwards; width: 0%;
   }
-  @keyframes progress-fill { from { width: 0% } to { width: 100% } }
+  @keyframes progress-fill { from{width:0%} to{width:100%} }
 
-  .slideshow-nav {
-    display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
-  }
+  .slideshow-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
   .slide-nav-btn {
     width: 32px; height: 32px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     background: var(--muted); border: 0.5px solid var(--border);
-    color: var(--foreground); cursor: pointer;
-    transition: background 0.15s;
+    color: var(--foreground); cursor: pointer; transition: background 0.15s;
   }
   .slide-nav-btn:hover { background: var(--accent); }
   .slide-dots { display: flex; align-items: center; gap: 4px; flex: 1; justify-content: center; }
@@ -887,12 +828,9 @@ const PAGE_STYLES = `
   }
   .slide-play-btn--active { background: oklch(0.55 0.12 160 / 0.2); }
 
-  .news-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;
-  }
+  .news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
   .news-card {
-    background: oklch(0.14 0.02 200);
-    border: 0.5px solid var(--border);
+    background: oklch(0.14 0.02 200); border: 0.5px solid var(--border);
     border-radius: 8px; padding: 10px 12px;
     display: flex; flex-direction: column; gap: 4px;
     cursor: pointer; text-decoration: none;
@@ -902,23 +840,28 @@ const PAGE_STYLES = `
     border-color: oklch(0.55 0.12 160 / 0.6);
     background: oklch(0.55 0.12 160 / 0.08);
   }
-  .news-card-cat { font-size: 10px; font-weight: 700; color: oklch(0.55 0.12 160); text-transform: uppercase; letter-spacing: 0.06em; }
-  .news-card-title { font-size: 12px; line-height: 1.45; color: var(--foreground); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .news-card-cat {
+    font-size: 10px; font-weight: 700; color: oklch(0.55 0.12 160);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .news-card-cat--foreign { color: oklch(0.65 0.1 270); }
+  .news-card-title {
+    font-size: 12px; line-height: 1.45; color: var(--foreground);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
   .news-card-source { font-size: 10px; color: var(--muted-foreground); margin-top: auto; }
 
   /* ===== OSVĚTA ACCORDION ===== */
   .osveta-accordion { display: flex; flex-direction: column; gap: 8px; }
   .osveta-item {
-    background: var(--card);
-    border: 0.5px solid var(--border);
-    border-radius: 12px; overflow: hidden;
-    transition: border-color 0.2s;
+    background: var(--card); border: 0.5px solid var(--border);
+    border-radius: 12px; overflow: hidden; transition: border-color 0.2s;
   }
   .osveta-item--open { border-color: oklch(0.45 0.08 190 / 0.6); }
   .osveta-trigger {
     width: 100%; display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 20px; background: transparent; border: none; cursor: pointer;
-    text-align: left; transition: background 0.15s;
+    padding: 16px 20px; background: transparent; border: none;
+    cursor: pointer; text-align: left; transition: background 0.15s;
   }
   .osveta-trigger:hover { background: var(--muted); }
   .osveta-trigger-left { display: flex; align-items: center; gap: 12px; }
@@ -930,9 +873,13 @@ const PAGE_STYLES = `
   .osveta-body--open { max-height: 2000px; }
   .osveta-content { padding: 0 20px 20px; border-top: 0.5px solid var(--border); padding-top: 16px; }
 
-  /* ===== OSVĚTA CONTENT STYLES ===== */
+  /* ===== OSVĚTA CONTENT ===== */
   .osveta-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-  @media (max-width: 640px) { .osveta-grid-2 { grid-template-columns: 1fr; } .news-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 640px) {
+    .osveta-grid-2 { grid-template-columns: 1fr; }
+    .news-grid { grid-template-columns: 1fr 1fr; }
+    .slide-title { font-size: 15px; }
+  }
   .osveta-h4 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.06em; }
   .osveta-h4--green { color: oklch(0.5 0.12 160); }
   .osveta-h4--red { color: oklch(0.5 0.18 30); }
@@ -946,10 +893,10 @@ const PAGE_STYLES = `
 
   .osveta-examples { display: flex; flex-direction: column; gap: 8px; }
   .osveta-example { display: flex; align-items: center; gap: 8px; }
-  .osveta-example-pwd { font-size: 12px; font-family: monospace; min-width: 160px; color: var(--foreground); }
+  .osveta-example-pwd { font-size: 11px; font-family: monospace; min-width: 150px; color: var(--foreground); }
   .osveta-example-bar-wrap { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-  .osveta-example-bar { height: 100%; border-radius: 2px; transition: width 0.5s; }
-  .osveta-example-label { font-size: 11px; font-weight: 500; min-width: 120px; text-align: right; }
+  .osveta-example-bar { height: 100%; border-radius: 2px; }
+  .osveta-example-label { font-size: 11px; font-weight: 500; min-width: 110px; text-align: right; }
 
   .osveta-formula { background: oklch(0.12 0.02 220); border: 0.5px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
   .osveta-formula-title { font-size: 11px; color: var(--muted-foreground); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -1017,7 +964,7 @@ const PAGE_STYLES = `
 // HLAVNÍ STRÁNKA
 // =============================================================================
 
-export default function OsvetaNewPage() {
+export default function OsvetaPage() {
   const { news, loading, lastUpdated, error, refresh } = useRssNews()
 
   return (
@@ -1025,8 +972,8 @@ export default function OsvetaNewPage() {
       <Navigation />
       <style>{PAGE_STYLES}</style>
 
-      {/* Live news ticker */}
-      {!loading && news.length > 0 && <NewsTicker news={news} />}
+      {/* Live news ticker — zobrazí se ihned (fallback) */}
+      <NewsTicker news={news} />
 
       <main className="container mx-auto px-4 py-10">
         <div className="max-w-5xl mx-auto space-y-10">
@@ -1041,7 +988,7 @@ export default function OsvetaNewPage() {
               Svět kybernetické bezpečnosti
             </h1>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
-              Aktuální zprávy z kyberbezpečnosti v reálném čase a kompletní průvodce ochranou vašich hesel.
+              Aktuální zprávy primárně z českých zdrojů a kompletní průvodce ochranou vašich hesel.
             </p>
           </div>
 
@@ -1075,11 +1022,17 @@ export default function OsvetaNewPage() {
               Otestujte svá hesla nebo si nechte vygenerovat nová — vše probíhá lokálně, žádná data neopustí váš prohlížeč.
             </p>
             <div className="flex flex-wrap justify-center gap-4 pt-2">
-              <Link href="/generator" className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
+              <Link
+                href="/generator"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+              >
                 <Key className="h-5 w-5" />
                 Generátor hesel
               </Link>
-              <Link href="/test" className="inline-flex items-center gap-2 px-6 py-3 rounded-lg border border-border bg-transparent hover:bg-accent transition-colors font-medium">
+              <Link
+                href="/test"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg border border-border bg-transparent hover:bg-accent transition-colors font-medium"
+              >
                 <Shield className="h-5 w-5" />
                 Analyzátor síly hesla
               </Link>
